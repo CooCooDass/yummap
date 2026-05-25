@@ -1,0 +1,34 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+*service_account*.json
+
+# Local legacy/archive data
+legacy/
+output/
+final_deliverables/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local tooling
+.vercel/
+.codex/
+.claude/
+.playwright-mcp/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,11 @@
+output/**
+docs/**
+web_viewer/**
+backend/tests/**
+__pycache__/**
+.codex/**
+.claude/**
+.playwright-mcp/**
+legacy/**
+*.log
+*.pyc

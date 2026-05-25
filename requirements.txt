@@ -1,0 +1,6 @@
+fastapi
+google-auth
+httpx
+pytest
+requests
+uvicorn

@@ -1,0 +1,19 @@
+{
+  "project": "restaurant_db",
+  "project_id": "aftqqlymsupnogbogmoy",
+  "tables": {
+    "restaurants": 1989,
+    "categories": 45,
+    "restaurant_search_documents": 1989
+  },
+  "grade_counts": {
+    "gold": 199,
+    "silver": 498,
+    "bronze": 1292
+  },
+  "embedding_dimension": 768,
+  "import_function": "yumap-import redeployed as disabled with verify_jwt=true",
+  "rpc": [
+    "match_restaurant_search_documents(query_embedding vector(768), match_count integer, grade_filter text[])"
+  ]
+}
