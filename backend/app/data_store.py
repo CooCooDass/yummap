@@ -9,20 +9,13 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from .config import Settings
+from .query_aliases import CATEGORY_ALIASES, query_tokens
 
 
 RESTAURANT_COLUMNS = (
     "rid,name,road_address,jibun_address,phone,hours,menus,latitude,longitude,"
     "grade,categories,meal_types,recommendation_tags"
 )
-CATEGORY_ALIASES = {
-    "돈까스": "돈카츠",
-    "돈까스집": "돈카츠",
-    "한식집": "한식",
-    "고기집": "고깃집",
-}
-
-
 class DataStoreError(RuntimeError):
     pass
 
@@ -415,20 +408,7 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
 
 
 def _token_overlap_score(query: str, text: str) -> int:
-    tokens = _query_tokens(query)
+    tokens = set(query_tokens(query))
     if not tokens:
         return 0
     return sum(1 for token in tokens if token in text or any(piece in token for piece in text.split()))
-
-
-def _query_tokens(query: str) -> set[str]:
-    tokens: set[str] = set()
-    for raw_token in query.replace(",", " ").replace("/", " ").split():
-        token = raw_token.strip().lower()
-        if len(token) < 2:
-            continue
-        tokens.add(token)
-        for suffix in ("집", "식당", "맛집", "요리"):
-            if token.endswith(suffix) and len(token) > len(suffix) + 1:
-                tokens.add(token[: -len(suffix)])
-    return tokens

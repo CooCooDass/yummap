@@ -59,6 +59,16 @@ def test_search_category_and_restaurant() -> None:
     assert restaurant_response.json()["restaurants"]
 
 
+def test_search_aliases_cover_common_food_terms() -> None:
+    aliases = ["돈가스", "커피전문점", "중국집", "스시", "고기집", "파스타", "쌀국수"]
+    for alias in aliases:
+        response = client.get(f"/search?q={alias}&limit=5")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["match_type"] == "category"
+        assert payload["restaurants"]
+
+
 def test_chat_scenarios() -> None:
     scenarios = [
         "원주에서 맛있는 돈까스집 추천해줘",

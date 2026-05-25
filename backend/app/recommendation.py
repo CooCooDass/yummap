@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from .data_store import DataStore
 from .distance import haversine_km
+from .query_aliases import CATEGORY_ALIASES, normalize_query_text, query_tokens
 
 
 GRADE_BOOST = {"gold": 1.0, "silver": 0.65, "bronze": 0.3}
-QUERY_SYNONYMS = {
-    "돈까스": "돈카츠",
-    "돈까스집": "돈카츠",
-    "한식집": "한식",
-    "고기집": "고깃집",
-    "브런치카페": "브런치",
-}
 
 
 def attach_distance(row: dict[str, Any], lat: float | None, lng: float | None) -> dict[str, Any]:
@@ -234,18 +227,9 @@ def _structured_fallback_matches(
     message: str,
     match_count: int,
 ) -> list[dict[str, Any]]:
-    search_text = message
-    replacements = {
-        "돈까스집": "돈까스",
-        "한식집": "한식",
-        "카페": "카페",
-        "gold": "gold",
-        "골드": "gold",
-    }
-    for source, target in replacements.items():
-        if source in message:
-            search_text = target
-            break
+    tokens = query_tokens(message)
+    search_text = next((token for token in tokens if token in CATEGORY_ALIASES.values()), None)
+    search_text = search_text or normalize_query_text(message)
 
     rows = store.search_restaurants_by_text(search_text, match_count)
     if not rows:
@@ -285,7 +269,7 @@ def keyword_match_boost(message: str, restaurant: dict[str, Any], search_documen
             search_document,
         ]
     ).lower()
-    tokens = _query_tokens(message)
+    tokens = query_tokens(message)
     if not tokens:
         return 0.0
     hits = sum(1 for token in tokens if token in text)
@@ -297,7 +281,7 @@ def _merge_direct_category_matches(
     message: str,
     matches: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    normalized_message = _normalize_query_text(message)
+    normalized_message = normalize_query_text(message)
     direct_category = None
     for category in store.list_categories():
         category_name = category["name"]
@@ -332,30 +316,6 @@ def _merge_direct_category_matches(
             seen.add(rid)
             merged.append(row)
     return merged
-
-
-def _query_tokens(message: str) -> list[str]:
-    tokens: set[str] = set()
-    for raw_token in re.split(r"[\s,./]+", message.lower()):
-        token = raw_token.strip()
-        if len(token) < 2:
-            continue
-        tokens.add(token)
-        tokens.add(QUERY_SYNONYMS.get(token, token))
-        for suffix in ("집", "식당", "맛집", "요리"):
-            if token.endswith(suffix) and len(token) > len(suffix) + 1:
-                stripped = token[: -len(suffix)]
-                tokens.add(stripped)
-                tokens.add(QUERY_SYNONYMS.get(stripped, stripped))
-    return list(tokens)
-
-
-def _normalize_query_text(message: str) -> str:
-    text = message.lower()
-    for source, target in QUERY_SYNONYMS.items():
-        text = text.replace(source, target)
-    return text
-
 
 def rerank_score(candidate: dict[str, Any]) -> float:
     similarity = max(0.0, min(1.0, float(candidate.get("semantic_similarity") or 0.0)))
