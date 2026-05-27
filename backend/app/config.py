@@ -16,6 +16,7 @@ class Settings:
     google_location: str
     google_service_account_json: str | None
     google_oauth_access_token: str | None
+    kakao_rest_api_key: str | None
     embedding_model: str
     chat_model: str
     allowed_origins: list[str]
@@ -50,7 +51,10 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def get_settings() -> Settings:
-    origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
+    origins = os.environ.get(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173",
+    )
     return Settings(
         supabase_url=os.environ.get("SUPABASE_URL") or "https://aftqqlymsupnogbogmoy.supabase.co",
         supabase_service_role_key=os.environ.get("SUPABASE_SERVICE_ROLE_KEY"),
@@ -61,6 +65,7 @@ def get_settings() -> Settings:
         google_location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us"),
         google_service_account_json=os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"),
         google_oauth_access_token=os.environ.get("GOOGLE_OAUTH_ACCESS_TOKEN"),
+        kakao_rest_api_key=os.environ.get("KAKAO_REST_API_KEY"),
         embedding_model=os.environ.get("GEMINI_EMBEDDING_MODEL", "gemini-embedding-002"),
         chat_model=os.environ.get("GEMINI_CHAT_MODEL", "gemini-3-flash-preview"),
         allowed_origins=[item.strip() for item in origins.split(",") if item.strip()],

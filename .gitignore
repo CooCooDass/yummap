@@ -21,11 +21,19 @@ __pycache__/
 .venv/
 venv/
 
+# Flutter
+frontend/.dart_tool/
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+
 # Local tooling
 .vercel/
 .codex/
 .claude/
 .playwright-mcp/
+.local-logs/
 
 # OS/editor
 .DS_Store

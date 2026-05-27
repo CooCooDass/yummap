@@ -19,6 +19,7 @@ GOOGLE_CLOUD_LOCATION=us
 GOOGLE_SERVICE_ACCOUNT_JSON=<single-line rotated service account JSON>
 GEMINI_EMBEDDING_MODEL=gemini-embedding-002
 GEMINI_CHAT_MODEL=gemini-3-flash-preview
+KAKAO_REST_API_KEY=...
 ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app
 ```
 
@@ -41,6 +42,8 @@ Invoke-RestMethod https://your-api-domain.vercel.app/chat `
 ## Security Notes
 
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` to the browser.
+- Never expose `KAKAO_REST_API_KEY` to the browser. The frontend uses only
+  `KAKAO_JAVASCRIPT_KEY`; local place search is proxied through `/places/search`.
 - Keep frontend requests pointed at this backend, not directly at Supabase.
 - Before public launch, enable rate limiting or Vercel Firewall rules for
   `/chat` because every request can call Gemini.

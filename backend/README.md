@@ -8,7 +8,8 @@ FastAPI backend for the Wonju restaurant map/search/chat experience.
 python -m pip install -r ..\requirements.txt
 $env:GOOGLE_CLOUD_PROJECT="project-68a630b4-e1e1-438a-b8e"
 $env:GOOGLE_CLOUD_LOCATION="us"
-python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+$env:KAKAO_REST_API_KEY="..."
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 The server keeps `SUPABASE_SERVICE_ROLE_KEY` server-side only. If Supabase env
@@ -22,7 +23,8 @@ $env:SUPABASE_SERVICE_ROLE_KEY="..."
 $env:GOOGLE_SERVICE_ACCOUNT_JSON="{...}"
 $env:GEMINI_EMBEDDING_MODEL="gemini-embedding-002"
 $env:GEMINI_CHAT_MODEL="gemini-3-flash-preview"
-$env:ALLOWED_ORIGINS="http://localhost:3000"
+$env:KAKAO_REST_API_KEY="..."
+$env:ALLOWED_ORIGINS="http://localhost:5173"
 ```
 
 For Vercel, use `GOOGLE_SERVICE_ACCOUNT_JSON` instead of local gcloud auth.
@@ -33,8 +35,10 @@ Local gcloud credentials are not available inside deployed Functions.
 - `GET /health`
 - `GET /categories`
 - `GET /categories/{category_name}/restaurants?lat=&lng=&limit=`
+- `GET /restaurants?lat=&lng=&limit=`
 - `GET /restaurants/{rid}?lat=&lng=`
 - `GET /search?q=&lat=&lng=&limit=`
+- `GET /places/search?q=`
 - `POST /chat`
 
 `POST /chat` uses Gemini Embedding 2 for retrieval and Gemini 3 Flash for the

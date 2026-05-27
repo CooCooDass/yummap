@@ -3,7 +3,7 @@
   "functions": {
     "app.py": {
       "maxDuration": 60,
-      "excludeFiles": "{legacy/**,output/**,docs/**,web_viewer/**,backend/tests/**,__pycache__/**,.codex/**,.claude/**,.playwright-mcp/**,**/*.pyc,**/*.log}"
+      "excludeFiles": "{legacy/**,output/**,docs/**,web_viewer/**,frontend/**,backend/tests/**,__pycache__/**,.codex/**,.claude/**,.playwright-mcp/**,**/*.pyc,**/*.log}"
     }
   }
 }

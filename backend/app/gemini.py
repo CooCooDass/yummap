@@ -173,7 +173,7 @@ class GeminiClient:
         )
         if not payload:
             return None
-        answer = payload.get("answer")
+        answer = payload.get("answer_intro") or payload.get("answer")
         return answer if isinstance(answer, str) else None
 
 
@@ -248,13 +248,16 @@ def _build_prompt(message: str, candidates: list[dict[str, Any]], intent: str) -
         f"{json.dumps(compact_candidates, ensure_ascii=False)}\n\n"
         "요청:\n"
         "다음 JSON 스키마만 반환한다:\n"
-        '{"answer":"한국어 답변","restaurant_ids":["후보 rid만"],'
+        '{"answer_intro":"추천 식당명을 자연스럽게 묶은 한 문장",'
+        '"restaurant_ids":["후보 rid만"],'
         '"restaurant_reasons":{"rid":"짧은 추천 이유"},'
         '"course_slots":[{"label":"Day 1 점심","rid":"후보 rid"}]}\n'
         "규칙:\n"
         "1. restaurant_ids와 course_slots.rid는 반드시 후보 JSON에 있는 rid만 사용한다.\n"
-        "2. answer에는 restaurant_ids에 넣은 식당만 언급한다.\n"
+        "2. answer_intro에는 restaurant_ids에 넣은 식당만 언급한다.\n"
         "3. 일반 추천은 3~8개, 일정형 질문은 5~8개를 고른다.\n"
         "4. gold/silver를 우선하되 질문 관련성과 거리가 더 중요하면 bronze도 포함할 수 있다.\n"
-        "5. 일정형 질문이면 course_slots를 Day/시간대별로 채운다."
+        "5. 일정형 질문이면 course_slots를 Day/시간대별로 채우고, 일반 추천이면 course_slots는 빈 배열로 둔다.\n"
+        "6. answer_intro는 번호 목록 없이 '원주에서 ...를 추천합니다.' 형식의 한 문장으로 작성한다.\n"
+        "7. 등급, 거리, 링크는 서버가 실제 데이터로 채우므로 answer_intro에는 쓰지 않는다."
     )

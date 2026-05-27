@@ -8,6 +8,8 @@ from .query_aliases import CATEGORY_ALIASES, normalize_query_text, query_tokens
 
 
 GRADE_BOOST = {"gold": 1.0, "silver": 0.65, "bronze": 0.3}
+GRADE_ICONS = {"gold": "🥇", "silver": "🥈", "bronze": "🥉"}
+GRADE_LABELS = {"gold": "골드", "silver": "실버", "bronze": "브론즈"}
 
 
 def attach_distance(row: dict[str, Any], lat: float | None, lng: float | None) -> dict[str, Any]:
@@ -35,6 +37,9 @@ def restaurant_summary(
         "latitude": item.get("latitude"),
         "longitude": item.get("longitude"),
         "road_address": item.get("road_address"),
+        "categories": item.get("categories") or [],
+        "meal_types": item.get("meal_types") or [],
+        "recommendation_tags": item.get("recommendation_tags") or [],
         "matched_reason": matched_reason,
     }
 
@@ -360,36 +365,87 @@ def deterministic_answer(message: str, intent: str, candidates: list[dict[str, A
     if not candidates:
         return "조건에 맞는 식당 후보를 찾지 못했습니다. 검색어를 조금 더 구체적으로 입력해 주세요."
     if intent == "itinerary":
-        labels = ["Day 1 점심", "Day 1 카페/간식", "Day 1 저녁", "Day 2 아침/브런치", "Day 2 점심"]
-        lines = ["제공된 원주 식당 데이터 기준으로 식당 중심 코스를 구성했습니다."]
-        for label, candidate in zip(labels, candidates):
-            lines.append(f"- {label}: {candidate['name']} ({candidate.get('grade')})")
-        lines.append("추천 식당 목록:")
-        for index, candidate in enumerate(candidates[:8], start=1):
-            lines.append(f"{index}. {candidate['name']} - {candidate.get('grade')} 등급, 질문 관련성이 높은 후보입니다.")
-        return "\n".join(lines)
+        names = _join_names([candidate["name"] for candidate in candidates[:8]])
+        return f"제공된 원주 식당 데이터 기준으로 {names}{object_particle(names)} 포함한 1박 2일 식당 코스를 추천합니다."
 
-    lines = [f"'{message}'에 맞춰 데이터에서 관련성이 높은 식당을 골랐습니다."]
-    lines.append("추천 식당 목록:")
-    for index, candidate in enumerate(candidates[:8], start=1):
-        distance = (
-            f", 약 {candidate['distance_km']}km"
-            if candidate.get("distance_km") is not None
-            else ""
-        )
-        categories = ", ".join(candidate.get("categories") or []) or "관련 카테고리"
-        lines.append(
-            f"{index}. {candidate['name']} - {candidate.get('grade')} 등급{distance}. {categories} 기준으로 추천합니다."
-        )
-    return "\n".join(lines)
+    names = _join_names([candidate["name"] for candidate in candidates[:8]])
+    topic = _recommendation_topic(message)
+    if topic:
+        return f"원주에서 {topic}{object_particle(topic)} 찾는다면 {names}{object_particle(names)} 추천합니다."
+    return f"원주 식당 데이터에서 질문과 관련성이 높은 {names}{object_particle(names)} 추천합니다."
 
 
 def chat_restaurant_reason(candidate: dict[str, Any]) -> str:
     categories = ", ".join(candidate.get("categories") or [])
-    grade = candidate.get("grade") or "등급 정보 없음"
+    grade = grade_label(candidate.get("grade"))
     if categories:
-        return f"{categories} 관련성이 있고 {grade} 등급입니다."
-    return f"질문과의 검색 관련성이 높고 {grade} 등급입니다."
+        return f"{categories} 카테고리와 관련성이 높은 {grade} 등급 식당입니다."
+    return f"질문과의 검색 관련성이 높은 {grade} 등급 식당입니다."
+
+
+def grade_icon(grade: str | None) -> str | None:
+    return GRADE_ICONS.get(str(grade or "").lower())
+
+
+def grade_label(grade: str | None) -> str:
+    return GRADE_LABELS.get(str(grade or "").lower(), "등급 정보 없음")
+
+
+def restaurant_detail_path(rid: str) -> str:
+    return f"/restaurants/{rid}"
+
+
+def distance_label(distance_km: float | None) -> str | None:
+    if distance_km is None:
+        return None
+    return f"{distance_km:.2f}km"
+
+
+def build_display_answer(answer: str, restaurants: list[Any]) -> str:
+    lines = [answer.strip(), ""]
+    for index, restaurant in enumerate(restaurants, start=1):
+        icon = restaurant.grade_icon or ""
+        distance = f" 거리: {restaurant.distance_label}" if restaurant.distance_label else ""
+        lines.append(f"{index}. [{restaurant.name}]({restaurant.detail_path}) {icon}{distance}".rstrip())
+        lines.append(f"   {restaurant.reason}")
+        if index < len(restaurants):
+            lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _join_names(names: list[str]) -> str:
+    cleaned = [name for name in names if name]
+    if not cleaned:
+        return "관련 식당"
+    if len(cleaned) == 1:
+        return cleaned[0]
+    return ", ".join(cleaned[:-1]) + f", {cleaned[-1]}"
+
+
+def object_particle(text: str) -> str:
+    stripped = text.strip()
+    if not stripped:
+        return "를"
+    last_char = stripped[-1]
+    code = ord(last_char)
+    if 0xAC00 <= code <= 0xD7A3:
+        return "을" if (code - 0xAC00) % 28 else "를"
+    return "을"
+
+
+def _recommendation_topic(message: str) -> str | None:
+    normalized = normalize_query_text(message)
+    if "돈카츠" in normalized:
+        return "돈카츠"
+    if "카페" in normalized or "커피" in normalized:
+        return "카페"
+    if "한식" in normalized:
+        return "한식"
+    if "가족" in normalized:
+        return "가족과 가기 좋은 식당"
+    if "gold" in message.lower() or "골드" in normalized:
+        return "골드 등급 식당"
+    return None
 
 
 def _summary_sort_key(row: dict[str, Any]) -> tuple[int, float]:

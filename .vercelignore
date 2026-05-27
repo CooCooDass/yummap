@@ -2,6 +2,7 @@ output/**
 docs/**
 web_viewer/**
 backend/tests/**
+frontend/**
 __pycache__/**
 .codex/**
 .claude/**

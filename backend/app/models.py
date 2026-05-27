@@ -14,6 +14,9 @@ class RestaurantSummary(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     road_address: str | None = None
+    categories: list[str] = Field(default_factory=list)
+    meal_types: list[str] = Field(default_factory=list)
+    recommendation_tags: list[str] = Field(default_factory=list)
     matched_reason: str | None = None
 
 
@@ -33,6 +36,12 @@ class SearchResponse(BaseModel):
     query: str
     match_type: str
     restaurants: list[RestaurantSummary]
+
+
+class PlaceSearchResponse(BaseModel):
+    lat: float
+    lng: float
+    name: str
 
 
 class RestaurantDetail(BaseModel):
@@ -64,8 +73,11 @@ class ChatRestaurant(BaseModel):
     rid: str
     name: str
     grade: str | None = None
+    grade_icon: str | None = None
     distance_km: float | None = None
+    distance_label: str | None = None
     reason: str
+    detail_path: str
     latitude: float | None = None
     longitude: float | None = None
 
@@ -78,6 +90,7 @@ class CourseSlot(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    display_answer: str
     restaurants: list[ChatRestaurant]
     course_slots: list[CourseSlot] = Field(default_factory=list)
     retrieval_debug: dict[str, Any]
