@@ -364,7 +364,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
         _myPosition!.longitude,
       ]);
 
-      ref.read(searchQueryProvider.notifier).updateQuery('');
+      ref.read(searchQueryProvider.notifier).clearQuery();
 
       setState(() {
         _isDetailOpen = false;
@@ -421,7 +421,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
       if (result != null) {
         js.context.callMethod('moveMap', [result.lat, result.lng, 5]);
 
-        ref.read(searchQueryProvider.notifier).updateQuery('');
+        ref.read(searchQueryProvider.notifier).clearQuery();
         ref.read(categoryProvider.notifier).toggleCategory('');
         _autoCompleteController?.clear();
 
@@ -451,62 +451,26 @@ class _MainScreenState extends ConsumerState<MainScreen>
     });
 
     final selectedCategory = ref.watch(categoryProvider);
+    final asyncCategories = ref.watch(categorySummariesProvider);
     final asyncDisplayedRestaurants = ref.watch(filteredRestaurantsProvider);
     Widget buildSheetHeader(int count) {
-      final categoryNames = [
-        '한식',
-        '중식',
-        '일식',
-        '양식',
-        '분식',
-        '패스트푸드',
-        '아시안',
-        '멕시칸',
-        '카페',
-        '고깃집',
-        '돼지갈비',
-        '소고기',
-        '한우',
-        '보쌈',
-        '닭갈비',
-        '초밥',
-        '돈카츠',
-        '사케동',
-        '일본가정식',
-        '일식당',
-        '해산물',
-        '짬뽕',
-        '칼국수',
-        '막국수',
-        '소바',
-        '메밀칼국수',
-        '면요리',
-        '만두',
-        '군만두',
-        '설렁탕',
-        '순두부',
-        '알탕',
-        '곤이',
-        '옹심이',
-        '국물요리',
-        '밥집',
-        '한정식',
-        '보리밥정식',
-        '나물',
-        '빵',
-        '브런치',
-        '이탈리안',
-        '태국음식',
-        '베트남음식',
-        '뷔페',
-        '술집',
-      ];
+      final categoryNames = asyncCategories.maybeWhen(
+        data: (categories) => categories
+            .map((category) => category.name)
+            .where((name) => name.isNotEmpty)
+            .toList(),
+        orElse: () => const <String>[],
+      );
 
       final categoryWidgets = categoryNames.map((name) {
         return CategoryItem(
           title: name,
           isSelected: selectedCategory == name,
-          onTap: () => ref.read(categoryProvider.notifier).toggleCategory(name),
+          onTap: () {
+            ref.read(searchQueryProvider.notifier).clearQuery();
+            _autoCompleteController?.clear();
+            ref.read(categoryProvider.notifier).toggleCategory(name);
+          },
         );
       }).toList();
 
@@ -972,9 +936,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                         searchQueryProvider
                                                                             .notifier,
                                                                       )
-                                                                      .updateQuery(
-                                                                        '',
-                                                                      );
+                                                                      .clearQuery();
                                                                   ref
                                                                       .read(
                                                                         categoryProvider

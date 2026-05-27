@@ -53,7 +53,7 @@ Used for smoke checks. Important fields:
 
 ### `GET /categories`
 
-Returns category metadata:
+Returns the production category list used for frontend category chips. Do not hardcode a separate frontend category set.
 
 ```json
 [
@@ -68,7 +68,7 @@ Returns category metadata:
 
 ### `GET /restaurants?lat=&lng=&limit=`
 
-Primary frontend list source. Each restaurant summary may include:
+Default nearby/recommended list source when no category is selected. Each restaurant summary may include:
 
 ```json
 {
@@ -102,7 +102,7 @@ Detail panel source. It extends the summary shape with:
 
 ### `GET /categories/{category_name}/restaurants?lat=&lng=&limit=`
 
-Returns category-scoped rankings:
+Returns category-scoped rankings. Category result lists must use this endpoint with `limit=100`; frontend local filtering of the full restaurant list is not allowed for category screens.
 
 ```json
 {

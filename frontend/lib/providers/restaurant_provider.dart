@@ -39,23 +39,48 @@ class SearchQueryNotifier extends Notifier<String> {
       state = query;
     });
   }
+
+  void clearQuery() {
+    if (_timer?.isActive ?? false) {
+      _timer!.cancel();
+    }
+    state = '';
+  }
 }
 
 final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(
   () => SearchQueryNotifier(),
 );
 
+final categorySummariesProvider = FutureProvider<List<CategorySummary>>((ref) {
+  return YumapApiService.fetchCategories();
+});
+
 class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
+  double _lat = defaultLat;
+  double _lng = defaultLng;
+
   @override
   Future<List<Restaurant>> build() {
-    return _loadRestaurants(defaultLat, defaultLng);
+    final category = ref.watch(categoryProvider);
+    return _loadRestaurants(_lat, _lng, category);
   }
 
-  Future<List<Restaurant>> _loadRestaurants(double lat, double lng) async {
-    final restaurants = await YumapApiService.fetchRestaurants(
-      lat: lat,
-      lng: lng,
-    );
+  Future<List<Restaurant>> _loadRestaurants(
+    double lat,
+    double lng,
+    String category,
+  ) async {
+    _lat = lat;
+    _lng = lng;
+    final restaurants = category.isEmpty
+        ? await YumapApiService.fetchRestaurants(lat: lat, lng: lng)
+        : await YumapApiService.fetchCategoryRestaurants(
+            category: category,
+            lat: lat,
+            lng: lng,
+            limit: 100,
+          );
     _sendMarkers(restaurants);
     if (restaurants.isNotEmpty) {
       js.context.callMethod('moveMap', [
@@ -72,7 +97,8 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
 
   Future<void> loadRestaurantsAt(double lat, double lng) async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _loadRestaurants(lat, lng));
+    final category = ref.read(categoryProvider);
+    state = await AsyncValue.guard(() => _loadRestaurants(lat, lng, category));
   }
 
   void toggleFavorite(String id) {
@@ -122,14 +148,10 @@ final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((
   ref,
 ) {
   final asyncRestaurants = ref.watch(restaurantProvider);
-  final category = ref.watch(categoryProvider);
   final searchQuery = ref.watch(searchQueryProvider);
 
   return asyncRestaurants.whenData((restaurants) {
     return restaurants.where((restaurant) {
-      if (category.isNotEmpty && !_matchesCategory(restaurant, category)) {
-        return false;
-      }
       if (searchQuery.isNotEmpty && !_matchesSearch(restaurant, searchQuery)) {
         return false;
       }
@@ -146,43 +168,6 @@ final favoriteRestaurantsProvider = Provider<List<Restaurant>>((ref) {
     orElse: () => [],
   );
 });
-
-bool _matchesCategory(Restaurant restaurant, String category) {
-  final groups = {
-    '일식': ['일식', '초밥', '돈카츠', '돈까스', '사케동', '일본가정식', '일식당', '소바', '해산물'],
-    '한식': [
-      '한식',
-      '막국수',
-      '보리밥정식',
-      '옹심이',
-      '닭갈비',
-      '알탕',
-      '나물',
-      '곤이',
-      '돼지갈비',
-      '한우',
-      '칼국수',
-      '소고기',
-      '한정식',
-      '설렁탕',
-      '순두부',
-      '메밀칼국수',
-      '보쌈',
-      '밥집',
-      '고깃집',
-      '국물요리',
-    ],
-    '중식': ['중식', '짬뽕', '만두', '군만두'],
-    '양식': ['양식', '브런치', '이탈리안', '패스트푸드', '멕시칸', '파스타'],
-    '분식': ['분식', '떡볶이', '김밥'],
-    '카페': ['카페', '핸드드립', '빵', '디저트'],
-    '아시안': ['아시안', '태국음식', '베트남음식', '쌀국수'],
-  };
-  final targets = groups[category] ?? [category];
-  return restaurant.categories.any((item) => targets.contains(item)) ||
-      restaurant.mealTypes.any((item) => targets.contains(item)) ||
-      restaurant.recommendationTags.any((item) => targets.contains(item));
-}
 
 bool _matchesSearch(Restaurant restaurant, String query) {
   final normalized = query.toLowerCase().replaceAll(' ', '');

@@ -44,6 +44,44 @@ class YumapApiService {
         .toList();
   }
 
+  static Future<List<CategorySummary>> fetchCategories() async {
+    final response = await http.get(_uri('/categories'));
+    final payload = _decodeResponse(response);
+    if (payload is! List) {
+      throw const YumapApiException('카테고리 목록 응답 형식이 올바르지 않습니다.');
+    }
+    return payload
+        .whereType<Map>()
+        .map(
+          (item) => CategorySummary.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+  }
+
+  static Future<List<Restaurant>> fetchCategoryRestaurants({
+    required String category,
+    double? lat,
+    double? lng,
+    int limit = 100,
+  }) async {
+    final encodedCategory = Uri.encodeComponent(category);
+    final response = await http.get(
+      _uriWithQuery('/categories/$encodedCategory/restaurants', {
+        'limit': limit.toString(),
+        if (lat != null) 'lat': lat.toString(),
+        if (lng != null) 'lng': lng.toString(),
+      }),
+    );
+    final payload = _decodeResponse(response);
+    if (payload is! Map || payload['restaurants'] is! List) {
+      throw const YumapApiException('카테고리 식당 응답 형식이 올바르지 않습니다.');
+    }
+    return (payload['restaurants'] as List)
+        .whereType<Map>()
+        .map((item) => Restaurant.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
   static Future<Restaurant> fetchRestaurantDetail(
     String rid, {
     double? lat,
@@ -103,6 +141,29 @@ class YumapApiService {
       throw YumapApiException('API ${response.statusCode}: ${response.body}');
     }
     return json.decode(utf8.decode(response.bodyBytes));
+  }
+}
+
+class CategorySummary {
+  final String name;
+  final String query;
+  final int totalCount;
+  final int? mainPageIndex;
+
+  const CategorySummary({
+    required this.name,
+    required this.query,
+    required this.totalCount,
+    this.mainPageIndex,
+  });
+
+  factory CategorySummary.fromJson(Map<String, dynamic> json) {
+    return CategorySummary(
+      name: json['name']?.toString() ?? '',
+      query: json['query']?.toString() ?? '',
+      totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
+      mainPageIndex: (json['main_page_index'] as num?)?.toInt(),
+    );
   }
 }
 

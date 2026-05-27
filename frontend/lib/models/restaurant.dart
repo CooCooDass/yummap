@@ -58,6 +58,7 @@ class Restaurant {
   final String id;
   final String name;
   final String roadAddress;
+  final int? categoryRank;
   final String jibunAddress;
   final String phone;
   final RestaurantHours? hours;
@@ -77,6 +78,7 @@ class Restaurant {
     required this.id,
     required this.name,
     required this.roadAddress,
+    this.categoryRank,
     required this.jibunAddress,
     required this.phone,
     this.hours,
@@ -107,6 +109,7 @@ class Restaurant {
       id: id,
       name: name,
       roadAddress: roadAddress ?? this.roadAddress,
+      categoryRank: categoryRank,
       jibunAddress: jibunAddress ?? this.jibunAddress,
       phone: phone ?? this.phone,
       hours: hours ?? this.hours,
@@ -127,6 +130,7 @@ class Restaurant {
       id: json['rid']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       roadAddress: json['road_address']?.toString() ?? '',
+      categoryRank: (json['category_rank'] as num?)?.toInt(),
       jibunAddress: json['jibun_address']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       hours: json['hours'] is Map
