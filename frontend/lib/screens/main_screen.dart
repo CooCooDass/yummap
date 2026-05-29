@@ -23,7 +23,7 @@ class _ChatMessage {
   const _ChatMessage.user(this.text) : isUser = true, restaurants = const [];
 
   const _ChatMessage.bot(this.text, {this.restaurants = const []})
-    : isUser = false;
+      : isUser = false;
 }
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -42,6 +42,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   Position? _myPosition;
   bool _isLoadingLocation = true;
   bool _isKeepMode = false;
+  bool _isFirstLocationUpdate = true;
   bool _isCategoryExpanded = false;
   TextEditingController? _autoCompleteController;
   final DraggableScrollableController _sheetController =
@@ -154,6 +155,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
         position.latitude,
         position.longitude,
       ]);
+
+      if (_isFirstLocationUpdate) {
+        _isFirstLocationUpdate = false;
+        js.context.callMethod('moveMap', [
+          position.latitude,
+          position.longitude,
+        ]);
+      }
     }, onError: (_) {});
   }
 
@@ -194,7 +203,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   void dispose() {
     _sheetController.dispose();
-    _animationController.dispose();
     _chatFocusNode.dispose();
     _chatInputController.dispose();
     super.dispose();
@@ -336,7 +344,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
       _detailRestaurantId = result.rid;
       _selectedRestaurantId = result.rid;
       _isDetailOpen = true;
+      _isChatActive = false;
     });
+    _chatFocusNode.unfocus();
     _syncMarkers();
 
     if (matched != null) {
@@ -347,13 +357,15 @@ class _MainScreenState extends ConsumerState<MainScreen>
       ]);
     }
 
-    if (_sheetController.isAttached) {
-      _sheetController.animateTo(
-        0.65,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-      );
-    }
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (_sheetController.isAttached) {
+        _sheetController.animateTo(
+          0.65,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   void _animateToMyLocation() {
@@ -390,19 +402,44 @@ class _MainScreenState extends ConsumerState<MainScreen>
     });
 
     final allRestaurants = ref.read(restaurantProvider).value ?? [];
+
+    bool matchesSearch(Restaurant restaurant, String query) {
+      final normalized = query.toLowerCase().replaceAll(' ', '');
+      final fields = [
+        restaurant.name,
+        restaurant.roadAddress,
+        ...restaurant.categories,
+        ...restaurant.mealTypes,
+        ...restaurant.recommendationTags,
+      ];
+      return fields.any(
+        (field) => field.toLowerCase().replaceAll(' ', '').contains(normalized),
+      );
+    }
+
     final matchedRestaurants = allRestaurants
-        .where((r) => r.name.contains(keyword))
+        .where((r) => matchesSearch(r, keyword))
         .toList();
 
     if (matchedRestaurants.isNotEmpty) {
       ref.read(searchQueryProvider.notifier).updateQuery(keyword);
 
-      final targetRestaurant = matchedRestaurants.first;
-      js.context.callMethod('moveMap', [
-        targetRestaurant.latitude,
-        targetRestaurant.longitude,
-        3,
-      ]);
+      if (matchedRestaurants.length > 1) {
+        final markerData = matchedRestaurants
+            .map((r) => {
+                  'latitude': r.latitude,
+                  'longitude': r.longitude,
+                })
+            .toList();
+        js.context.callMethod('setBoundsToRestaurants', [json.encode(markerData)]);
+      } else {
+        final targetRestaurant = matchedRestaurants.first;
+        js.context.callMethod('moveMap', [
+          targetRestaurant.latitude,
+          targetRestaurant.longitude,
+          3,
+        ]);
+      }
 
       _syncMarkers();
 
@@ -454,6 +491,66 @@ class _MainScreenState extends ConsumerState<MainScreen>
     final asyncCategories = ref.watch(categorySummariesProvider);
     final asyncDisplayedRestaurants = ref.watch(filteredRestaurantsProvider);
     Widget buildSheetHeader(int count) {
+      Widget buildGradeButton(String grade, String label) {
+        final selectedGrade = ref.watch(gradeFilterProvider);
+        final isSelected = selectedGrade == grade;
+        return GestureDetector(
+          onTap: () {
+            ref.read(gradeFilterProvider.notifier).toggleGrade(grade);
+          },
+          child: Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primaryLight : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isSelected ? 0.08 : 0.03),
+                    blurRadius: 5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.textPrimary.withOpacity(0.8),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      final gradeWidgets = [
+        buildGradeButton('GOLD', '🥇 Gold'),
+        buildGradeButton('SILVER', '🥈 Silver'),
+        buildGradeButton('BRONZE', '🥉 Bronze'),
+      ];
+
+      final verticalDivider = Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: Container(
+          width: 1.5,
+          height: 24,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(1),
+          ),
+        ),
+      );
+
       final categoryNames = asyncCategories.maybeWhen(
         data: (categories) => categories
             .map((category) => category.name)
@@ -550,18 +647,22 @@ class _MainScreenState extends ConsumerState<MainScreen>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      _isKeepMode
-                          ? 'keep list 💖'
-                          : (selectedCategory.isEmpty
-                                ? '근처 추천 맛집'
-                                : '✨ 추천 $selectedCategory 맛집'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                    Expanded(
+                      child: Text(
+                        _isKeepMode
+                            ? 'keep list 💖'
+                            : (selectedCategory.isEmpty
+                                  ? '근처 추천 맛집'
+                                  : '✨ 추천 $selectedCategory 맛집'),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 8),
 
                     Row(
                       children: [
@@ -636,7 +737,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(children: categoryWidgets),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          ...gradeWidgets,
+                          verticalDivider,
+                          ...categoryWidgets,
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -658,7 +766,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     child: Wrap(
                       spacing: 10,
                       runSpacing: 10,
-                      children: categoryWidgets,
+                      children: [
+                        ...gradeWidgets,
+                        ...categoryWidgets,
+                      ],
                     ),
                   ),
                 ),
@@ -688,391 +799,479 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     child: const MapScreen(),
                   ),
 
-                  Positioned(
-                    bottom: 150,
-                    right: 20,
-                    child: FloatingActionButton(
-                      backgroundColor: AppColors.background,
-                      mini: true,
-                      elevation: 4,
-                      onPressed: _animateToMyLocation,
-                      child: const Icon(
-                        Icons.my_location,
-                        color: AppColors.primary,
-                      ),
-                    ),
+                  AnimatedBuilder(
+                    animation: _sheetController,
+                    builder: (context, child) {
+                      final mediaQuery = MediaQuery.of(context);
+                      final safeAreaHeight = mediaQuery.size.height - mediaQuery.padding.top - mediaQuery.padding.bottom;
+
+                      double currentSheetSize = 0.45;
+                      if (_sheetController.isAttached) {
+                        currentSheetSize = _sheetController.size;
+                      } else if (_isDetailOpen) {
+                        currentSheetSize = 0.65;
+                      }
+
+                      final bottomOffset = safeAreaHeight * currentSheetSize;
+                      final showFloatingButtons = currentSheetSize < 0.8 && !_isChatActive;
+
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned(
+                            bottom: bottomOffset + 82,
+                            right: 20,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 200),
+                              opacity: showFloatingButtons ? 1.0 : 0.0,
+                              child: IgnorePointer(
+                                ignoring: !showFloatingButtons,
+                                child: PointerInterceptor(
+                                  child: FloatingActionButton(
+                                    heroTag: 'my_location_fab',
+                                    backgroundColor: AppColors.background,
+                                    mini: true,
+                                    elevation: 4,
+                                    onPressed: _animateToMyLocation,
+                                    child: const Icon(
+                                      Icons.my_location,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: bottomOffset + 12,
+                            right: 20,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 200),
+                              opacity: showFloatingButtons ? 1.0 : 0.0,
+                              child: IgnorePointer(
+                                ignoring: !showFloatingButtons,
+                                child: PointerInterceptor(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      FloatingActionButton(
+                                        heroTag: 'llm_chat_fab',
+                                        onPressed: () {
+                                          setState(() {
+                                            _isChatActive = true;
+                                          });
+                                          Future.delayed(
+                                            const Duration(milliseconds: 400),
+                                            () => _chatFocusNode.requestFocus(),
+                                          );
+                                        },
+                                        backgroundColor: AppColors.background,
+                                        mini: true,
+                                        elevation: 4,
+                                        child: ShaderMask(
+                                          shaderCallback: (bounds) => const LinearGradient(
+                                            colors: [
+                                              Colors.blue,
+                                              Colors.purple,
+                                              Colors.orange,
+                                            ],
+                                          ).createShader(bounds),
+                                          child: const Icon(
+                                            Icons.auto_awesome,
+                                            color: Colors.white,
+                                            size: 22,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.65),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Text(
+                                          'AI 챗',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   Positioned(
                     top: 20,
                     left: 20,
-
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOutCubic,
-
-                      width: _isDetailOpen
-                          ? 50
-                          : MediaQuery.of(context).size.width - 110,
-                      height: 50,
-
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(25),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const NeverScrollableScrollPhysics(),
-
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
-                            switchInCurve: Curves.easeIn,
-                            switchOutCurve: Curves.easeOut,
-
-                            child: _isDetailOpen
-                                ? SizedBox(
-                                    key: const ValueKey('search_btn_morph'),
-                                    width: 50,
-                                    height: 50,
-                                    child: IconButton(
-                                      icon: const Icon(
-                                        Icons.search,
-                                        color: Colors.black87,
-                                        size: 24,
+                    child: PointerInterceptor(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOutCubic,
+                        width: _isDetailOpen
+                            ? 50
+                            : MediaQuery.of(context).size.width - 110,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(25),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const NeverScrollableScrollPhysics(),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              switchInCurve: Curves.easeIn,
+                              switchOutCurve: Curves.easeOut,
+                              child: _isDetailOpen
+                                  ? SizedBox(
+                                      key: const ValueKey('search_btn_morph'),
+                                      width: 50,
+                                      height: 50,
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.search,
+                                          color: Colors.black87,
+                                          size: 24,
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            _isDetailOpen = false;
+                                          });
+                                          Future.delayed(
+                                            const Duration(milliseconds: 50),
+                                            () {
+                                              if (_sheetController.isAttached) {
+                                                _sheetController.animateTo(
+                                                  0.45,
+                                                  duration: const Duration(
+                                                    milliseconds: 400,
+                                                  ),
+                                                  curve: Curves.easeOutCubic,
+                                                );
+                                              }
+                                            },
+                                          );
+                                          Future.delayed(
+                                            const Duration(milliseconds: 300),
+                                            () {
+                                              _searchFocusNode?.requestFocus();
+                                            },
+                                          );
+                                        },
                                       ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _isDetailOpen = false;
-                                        });
-                                        Future.delayed(
-                                          const Duration(milliseconds: 50),
-                                          () {
-                                            if (_sheetController.isAttached) {
-                                              _sheetController.animateTo(
-                                                0.45,
-                                                duration: const Duration(
-                                                  milliseconds: 400,
+                                    )
+                                  : SizedBox(
+                                      key: const ValueKey('search_bar_morph'),
+                                      width:
+                                          MediaQuery.of(context).size.width - 110,
+                                      height: 50,
+                                      child: Autocomplete<String>(
+                                        initialValue: TextEditingValue(
+                                          text: ref.read(searchQueryProvider),
+                                        ),
+                                        optionsBuilder:
+                                            (TextEditingValue textEditingValue) {
+                                              final query = textEditingValue.text
+                                                  .trim();
+                                              if (query.isEmpty) {
+                                                return const Iterable<
+                                                  String
+                                                >.empty();
+                                              }
+                                              final restaurants =
+                                                  ref
+                                                      .read(restaurantProvider)
+                                                      .value ??
+                                                  const <Restaurant>[];
+                                              return restaurants
+                                                  .map(
+                                                    (restaurant) =>
+                                                        restaurant.name,
+                                                  )
+                                                  .where(
+                                                    (name) =>
+                                                        name.contains(query),
+                                                  )
+                                                  .take(8);
+                                            },
+                                        onSelected: (String selection) {
+                                          _handleSearch(selection);
+                                        },
+                                        fieldViewBuilder:
+                                            (
+                                              BuildContext context,
+                                              TextEditingController
+                                              textEditingController,
+                                              FocusNode focusNode,
+                                              VoidCallback onFieldSubmitted,
+                                            ) {
+                                              _searchFocusNode = focusNode;
+                                              _autoCompleteController =
+                                                  textEditingController;
+
+                                              return Container(
+                                                height: 50,
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.background,
+                                                  borderRadius:
+                                                      BorderRadius.circular(25),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withOpacity(0.1),
+                                                      blurRadius: 10,
+                                                    ),
+                                                  ],
                                                 ),
-                                                curve: Curves.easeOutCubic,
-                                              );
-                                            }
-                                          },
-                                        );
-                                        Future.delayed(
-                                          const Duration(milliseconds: 300),
-                                          () {
-                                            _searchFocusNode?.requestFocus();
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  )
-                                : SizedBox(
-                                    key: const ValueKey('search_bar_morph'),
-                                    width:
-                                        MediaQuery.of(context).size.width - 110,
-                                    height: 50,
-                                    child: Autocomplete<String>(
-                                      initialValue: TextEditingValue(
-                                        text: ref.read(searchQueryProvider),
-                                      ),
+                                                child: Row(
+                                                  children: [
+                                                    const SizedBox(width: 15),
+                                                    const Icon(
+                                                      Icons.search,
+                                                      color:
+                                                          AppColors.textSecondary,
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Expanded(
+                                                      child: TextField(
+                                                        controller:
+                                                            textEditingController,
+                                                        focusNode: focusNode,
+                                                        textAlignVertical:
+                                                            TextAlignVertical
+                                                                .center,
+                                                        onTap: () {
+                                                          if (_isDetailOpen ||
+                                                              _selectedRestaurantId !=
+                                                                  null) {
+                                                            setState(() {
+                                                              _isDetailOpen =
+                                                                  false;
+                                                              _detailRestaurantId =
+                                                                  null;
+                                                              _selectedRestaurantId =
+                                                                  null;
+                                                            });
 
-                                      optionsBuilder:
-                                          (TextEditingValue textEditingValue) {
-                                            final query = textEditingValue.text
-                                                .trim();
-                                            if (query.isEmpty) {
-                                              return const Iterable<
-                                                String
-                                              >.empty();
-                                            }
-                                            final restaurants =
-                                                ref
-                                                    .read(restaurantProvider)
-                                                    .value ??
-                                                const <Restaurant>[];
-                                            return restaurants
-                                                .map(
-                                                  (restaurant) =>
-                                                      restaurant.name,
-                                                )
-                                                .where(
-                                                  (name) =>
-                                                      name.contains(query),
-                                                )
-                                                .take(8);
-                                          },
+                                                            _syncMarkers();
 
-                                      onSelected: (String selection) {
-                                        _handleSearch(selection);
-                                      },
-
-                                      fieldViewBuilder:
-                                          (
-                                            BuildContext context,
-                                            TextEditingController
-                                            textEditingController,
-                                            FocusNode focusNode,
-                                            VoidCallback onFieldSubmitted,
-                                          ) {
-                                            _searchFocusNode = focusNode;
-                                            _autoCompleteController =
-                                                textEditingController;
-
-                                            return Container(
-                                              height: 50,
-                                              decoration: BoxDecoration(
-                                                color: AppColors.background,
-                                                borderRadius:
-                                                    BorderRadius.circular(25),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withOpacity(0.1),
-                                                    blurRadius: 10,
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  const SizedBox(width: 15),
-                                                  const Icon(
-                                                    Icons.search,
-                                                    color:
-                                                        AppColors.textSecondary,
-                                                  ),
-                                                  const SizedBox(width: 10),
-                                                  Expanded(
-                                                    child: TextField(
-                                                      controller:
-                                                          textEditingController,
-                                                      focusNode: focusNode,
-                                                      textAlignVertical:
-                                                          TextAlignVertical
-                                                              .center,
-
-                                                      onTap: () {
-                                                        if (_isDetailOpen ||
-                                                            _selectedRestaurantId !=
-                                                                null) {
-                                                          setState(() {
-                                                            _isDetailOpen =
-                                                                false;
-                                                            _detailRestaurantId =
-                                                                null;
-                                                            _selectedRestaurantId =
-                                                                null;
-                                                          });
-
-                                                          _syncMarkers();
-
-                                                          if (_sheetController
-                                                              .isAttached) {
-                                                            _sheetController.animateTo(
-                                                              0.45,
-                                                              duration:
-                                                                  const Duration(
-                                                                    milliseconds:
-                                                                        300,
-                                                                  ),
-                                                              curve: Curves
-                                                                  .easeOutCubic,
-                                                            );
+                                                            if (_sheetController
+                                                                .isAttached) {
+                                                              _sheetController.animateTo(
+                                                                0.45,
+                                                                duration:
+                                                                    const Duration(
+                                                                      milliseconds:
+                                                                          300,
+                                                                    ),
+                                                                curve: Curves
+                                                                    .easeOutCubic,
+                                                              );
+                                                            }
                                                           }
-                                                        }
-                                                      },
-
-                                                      onChanged: (value) {
-                                                        ref
-                                                            .read(
-                                                              searchQueryProvider
-                                                                  .notifier,
-                                                            )
-                                                            .updateQuery(value);
-                                                      },
-                                                      onSubmitted: (value) {
-                                                        _handleSearch(value);
-                                                      },
-                                                      decoration: InputDecoration(
-                                                        isDense: true,
-                                                        contentPadding:
-                                                            const EdgeInsets.symmetric(
-                                                              vertical: 12,
-                                                            ),
-                                                        hintText: '음식점, 주소 검색',
-                                                        hintStyle:
-                                                            const TextStyle(
-                                                              color: AppColors
-                                                                  .textSecondary,
-                                                              fontSize: 14,
-                                                            ),
-                                                        border:
-                                                            InputBorder.none,
-                                                        suffixIcon:
-                                                            textEditingController
-                                                                .text
-                                                                .isNotEmpty
-                                                            ? IconButton(
-                                                                icon: const Icon(
-                                                                  Icons.cancel,
-                                                                  color: Colors
-                                                                      .grey,
-                                                                  size: 20,
-                                                                ),
-                                                                onPressed: () {
-                                                                  textEditingController
-                                                                      .clear();
-                                                                  ref
-                                                                      .read(
-                                                                        searchQueryProvider
-                                                                            .notifier,
-                                                                      )
-                                                                      .clearQuery();
-                                                                  ref
-                                                                      .read(
-                                                                        categoryProvider
-                                                                            .notifier,
-                                                                      )
-                                                                      .toggleCategory(
-                                                                        '',
-                                                                      );
-                                                                  _syncMarkers();
-                                                                },
+                                                        },
+                                                        onChanged: (value) {
+                                                          ref
+                                                              .read(
+                                                                searchQueryProvider
+                                                                    .notifier,
                                                               )
-                                                            : null,
+                                                              .updateQuery(value);
+                                                        },
+                                                        onSubmitted: (value) {
+                                                          _handleSearch(value);
+                                                        },
+                                                        decoration: InputDecoration(
+                                                          isDense: true,
+                                                          contentPadding:
+                                                              const EdgeInsets.symmetric(
+                                                                vertical: 12,
+                                                              ),
+                                                          hintText: '음식점, 주소 검색',
+                                                          hintStyle:
+                                                              const TextStyle(
+                                                                color: AppColors
+                                                                    .textSecondary,
+                                                                fontSize: 14,
+                                                              ),
+                                                          border: InputBorder.none,
+                                                          suffixIcon:
+                                                              textEditingController
+                                                                  .text
+                                                                  .isNotEmpty
+                                                              ? IconButton(
+                                                                  icon: const Icon(
+                                                                    Icons.cancel,
+                                                                    color: Colors
+                                                                        .grey,
+                                                                    size: 20,
+                                                                  ),
+                                                                  onPressed: () {
+                                                                    textEditingController
+                                                                        .clear();
+                                                                    ref
+                                                                        .read(
+                                                                          searchQueryProvider
+                                                                              .notifier,
+                                                                        )
+                                                                        .clearQuery();
+                                                                    ref
+                                                                        .read(
+                                                                          categoryProvider
+                                                                              .notifier,
+                                                                        )
+                                                                        .toggleCategory(
+                                                                          '',
+                                                                        );
+                                                                    _syncMarkers();
+                                                                  },
+                                                                )
+                                                              : null,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                        optionsViewBuilder:
+                                            (
+                                              BuildContext context,
+                                              AutocompleteOnSelected<String>
+                                              onSelected,
+                                              Iterable<String> options,
+                                            ) {
+                                              return Align(
+                                                alignment: Alignment.topLeft,
+                                                child: GestureDetector(
+                                                  behavior:
+                                                      HitTestBehavior.opaque,
+                                                  onTap: () {},
+                                                  child: Material(
+                                                    color: Colors.transparent,
+                                                    child: Container(
+                                                      margin:
+                                                          const EdgeInsets.only(
+                                                            top: 8,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            AppColors.background,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              20,
+                                                            ),
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: Colors.black
+                                                                .withOpacity(0.1),
+                                                            blurRadius: 10,
+                                                            offset: const Offset(
+                                                              0,
+                                                              4,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      constraints: BoxConstraints(
+                                                        maxHeight: 200,
+                                                        maxWidth:
+                                                            MediaQuery.of(
+                                                              context,
+                                                            ).size.width -
+                                                            110,
+                                                      ),
+                                                      child: ListView.builder(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              vertical: 8,
+                                                            ),
+                                                        shrinkWrap: true,
+                                                        itemCount: options.length,
+                                                        itemBuilder:
+                                                            (
+                                                              BuildContext
+                                                              context,
+                                                              int index,
+                                                            ) {
+                                                              final String
+                                                              option = options
+                                                                  .elementAt(
+                                                                    index,
+                                                                  );
+                                                              return InkWell(
+                                                                onTap: () =>
+                                                                    onSelected(
+                                                                      option,
+                                                                    ),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      10,
+                                                                    ),
+                                                                child: Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            20,
+                                                                        vertical:
+                                                                            12,
+                                                                      ),
+                                                                  child: Row(
+                                                                    children: [
+                                                                      const Icon(
+                                                                        Icons
+                                                                            .search,
+                                                                        size: 16,
+                                                                        color: AppColors
+                                                                            .textSecondary,
+                                                                      ),
+                                                                      const SizedBox(
+                                                                        width: 10,
+                                                                      ),
+                                                                      Text(
+                                                                        option,
+                                                                        style: const TextStyle(
+                                                                          color: AppColors
+                                                                              .textPrimary,
+                                                                          fontSize:
+                                                                              14,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
                                                       ),
                                                     ),
                                                   ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-
-                                      optionsViewBuilder:
-                                          (
-                                            BuildContext context,
-                                            AutocompleteOnSelected<String>
-                                            onSelected,
-                                            Iterable<String> options,
-                                          ) {
-                                            return Align(
-                                              alignment: Alignment.topLeft,
-                                              child: GestureDetector(
-                                                behavior:
-                                                    HitTestBehavior.opaque,
-                                                onTap: () {},
-                                                child: Material(
-                                                  color: Colors.transparent,
-                                                  child: Container(
-                                                    margin:
-                                                        const EdgeInsets.only(
-                                                          top: 8,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          AppColors.background,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            20,
-                                                          ),
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.black
-                                                              .withOpacity(0.1),
-                                                          blurRadius: 10,
-                                                          offset: const Offset(
-                                                            0,
-                                                            4,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    constraints: BoxConstraints(
-                                                      maxHeight: 200,
-                                                      maxWidth:
-                                                          MediaQuery.of(
-                                                            context,
-                                                          ).size.width -
-                                                          110,
-                                                    ),
-                                                    child: ListView.builder(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            vertical: 8,
-                                                          ),
-                                                      shrinkWrap: true,
-                                                      itemCount: options.length,
-                                                      itemBuilder:
-                                                          (
-                                                            BuildContext
-                                                            context,
-                                                            int index,
-                                                          ) {
-                                                            final String
-                                                            option = options
-                                                                .elementAt(
-                                                                  index,
-                                                                );
-                                                            return InkWell(
-                                                              onTap: () =>
-                                                                  onSelected(
-                                                                    option,
-                                                                  ),
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    10,
-                                                                  ),
-                                                              child: Padding(
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          20,
-                                                                      vertical:
-                                                                          12,
-                                                                    ),
-                                                                child: Row(
-                                                                  children: [
-                                                                    const Icon(
-                                                                      Icons
-                                                                          .search,
-                                                                      size: 16,
-                                                                      color: AppColors
-                                                                          .textSecondary,
-                                                                    ),
-                                                                    const SizedBox(
-                                                                      width: 10,
-                                                                    ),
-                                                                    Text(
-                                                                      option,
-                                                                      style: const TextStyle(
-                                                                        color: AppColors
-                                                                            .textPrimary,
-                                                                        fontSize:
-                                                                            14,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            );
-                                                          },
-                                                    ),
-                                                  ),
                                                 ),
-                                              ),
-                                            );
-                                          },
+                                              );
+                                            },
+                                      ),
                                     ),
-                                  ),
+                            ),
                           ),
                         ),
                       ),
@@ -1082,59 +1281,61 @@ class _MainScreenState extends ConsumerState<MainScreen>
                   Positioned(
                     top: 20,
                     right: 20,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isKeepMode = !_isKeepMode;
+                    child: PointerInterceptor(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isKeepMode = !_isKeepMode;
 
-                          if (_isKeepMode) {
-                            _isDetailOpen = false;
-                          }
-                        });
-                        _syncMarkers();
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        height: 50,
-                        width: 60,
-                        decoration: BoxDecoration(
-                          color: _isKeepMode
-                              ? AppColors.error
-                              : AppColors.background,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 5,
-                            ),
-                          ],
-                          border: Border.all(
+                            if (_isKeepMode) {
+                              _isDetailOpen = false;
+                            }
+                          });
+                          _syncMarkers();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          height: 50,
+                          width: 60,
+                          decoration: BoxDecoration(
                             color: _isKeepMode
-                                ? Colors.transparent
-                                : AppColors.error.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.favorite,
+                                ? AppColors.error
+                                : AppColors.background,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 5,
+                              ),
+                            ],
+                            border: Border.all(
                               color: _isKeepMode
-                                  ? Colors.white
-                                  : AppColors.error,
-                              size: 20,
+                                  ? Colors.transparent
+                                  : AppColors.error.withOpacity(0.3),
                             ),
-                            Text(
-                              'keep',
-                              style: TextStyle(
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.favorite,
                                 color: _isKeepMode
                                     ? Colors.white
                                     : AppColors.error,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                                size: 20,
                               ),
-                            ),
-                          ],
+                              Text(
+                                'keep',
+                                style: TextStyle(
+                                  color: _isKeepMode
+                                      ? Colors.white
+                                      : AppColors.error,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1475,11 +1676,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                         .favorite_border,
                                                               color:
                                                                   restaurant
-                                                                      .isFavorite
-                                                                  ? AppColors
-                                                                        .error
-                                                                  : AppColors
-                                                                        .divider,
+                                                                          .isFavorite
+                                                                      ? AppColors
+                                                                          .error
+                                                                      : AppColors
+                                                                          .divider,
                                                             ),
                                                             onPressed: () => ref
                                                                 .read(
@@ -1586,10 +1787,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                             onTap: () {},
                             child: Container(
                               constraints: const BoxConstraints(
-                                maxWidth: 420,
                                 maxHeight: 550,
                               ),
-                              width: MediaQuery.of(context).size.width * 0.92,
+                              width: MediaQuery.of(context).size.width,
                               height: MediaQuery.of(context).size.height * 0.55,
                               decoration: BoxDecoration(
                                 color: AppColors.background,
@@ -1647,17 +1847,61 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                       ],
                                     ),
                                   ),
-
                                   Expanded(
                                     child: ListView.builder(
                                       reverse: true,
                                       padding: const EdgeInsets.all(16),
-                                      itemCount: _chatMessages.length,
+                                      itemCount: _chatMessages.length + (_isChatSending ? 1 : 0),
                                       itemBuilder: (context, index) {
+                                        if (_isChatSending && index == 0) {
+                                          return Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Container(
+                                              margin: const EdgeInsets.only(
+                                                bottom: 12,
+                                              ),
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 12,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade200,
+                                                borderRadius: BorderRadius.circular(15).copyWith(
+                                                  bottomLeft: const Radius.circular(0),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: const [
+                                                  SizedBox(
+                                                    width: 14,
+                                                    height: 14,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                                        AppColors.primary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  SizedBox(width: 10),
+                                                  Text(
+                                                    '답변을 생각하고 있어요...',
+                                                    style: TextStyle(
+                                                      color: AppColors.textPrimary,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        }
+
+                                        final messageIndex = _isChatSending ? index - 1 : index;
                                         final msg =
                                             _chatMessages[_chatMessages.length -
                                                 1 -
-                                                index];
+                                                messageIndex];
                                         final isMe = msg.isUser;
                                         return Align(
                                           alignment: isMe
@@ -1776,29 +2020,20 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       ),
                     ),
                   ),
-
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutCubic,
-                    bottom: _isChatActive ? -100 : 40,
+                    bottom: -100,
                     right: 20,
                     child: PointerInterceptor(
                       child: FloatingActionButton(
-                        onPressed: () {
-                          setState(() {
-                            _isChatActive = true;
-                          });
-                          Future.delayed(
-                            const Duration(milliseconds: 400),
-                            () => _chatFocusNode.requestFocus(),
-                          );
-                        },
-                        backgroundColor: AppColors.primary,
-                        elevation: 5,
-                        child: const Icon(
-                          Icons.chat_bubble_outline,
-                          color: Colors.white,
-                        ),
+                        onPressed: () {},
+                        backgroundColor: Colors.transparent,
+                        elevation: 0,
+                        highlightElevation: 0,
+                        hoverElevation: 0,
+                        focusElevation: 0,
+                        child: const SizedBox(),
                       ),
                     ),
                   ),

@@ -119,7 +119,12 @@ class RestaurantDetailScreen extends ConsumerWidget {
           }
           return const Center(child: Text('식당 정보를 불러올 수 없습니다.'));
         },
-        data: (restaurant) => _buildBody(context, ref, restaurant),
+        data: (restaurant) {
+          final displayRestaurant = cachedRestaurant != null
+              ? restaurant.copyWith(isFavorite: cachedRestaurant.isFavorite)
+              : restaurant;
+          return _buildBody(context, ref, displayRestaurant);
+        },
       ),
     );
   }

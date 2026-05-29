@@ -144,16 +144,35 @@ final restaurantDetailProvider = FutureProvider.family<Restaurant, String>((
   return YumapApiService.fetchRestaurantDetail(rid);
 });
 
+class GradeFilterNotifier extends Notifier<String> {
+  @override
+  String build() => 'ALL';
+
+  void toggleGrade(String grade) {
+    state = state == grade ? 'ALL' : grade;
+  }
+}
+
+final gradeFilterProvider = NotifierProvider<GradeFilterNotifier, String>(
+  () => GradeFilterNotifier(),
+);
+
 final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((
   ref,
 ) {
   final asyncRestaurants = ref.watch(restaurantProvider);
   final searchQuery = ref.watch(searchQueryProvider);
+  final selectedGrade = ref.watch(gradeFilterProvider);
 
   return asyncRestaurants.whenData((restaurants) {
     return restaurants.where((restaurant) {
       if (searchQuery.isNotEmpty && !_matchesSearch(restaurant, searchQuery)) {
         return false;
+      }
+      if (selectedGrade != 'ALL' && selectedGrade.isNotEmpty) {
+        if (restaurant.grade.toUpperCase() != selectedGrade.toUpperCase()) {
+          return false;
+        }
       }
       return true;
     }).toList();
