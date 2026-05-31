@@ -446,6 +446,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Calculate precise collapsed size to show exactly 1 restaurant card (85px)
+    // plus the header heights (about 125px) = 210px in total.
+    final minSize = (210.0 / screenHeight).clamp(0.15, 0.4);
+
     ref.listen(filteredRestaurantsProvider, (previous, next) {
       _syncMarkers();
     });
@@ -474,12 +479,36 @@ class _MainScreenState extends ConsumerState<MainScreen>
         );
       }).toList();
 
+      void toggleSheet() {
+        if (!_sheetController.isAttached) return;
+        final currentSize = _sheetController.size;
+        final maxSize = _isDetailOpen ? 1.0 : 0.87;
+
+        double targetSize;
+        if (currentSize < (minSize + 0.05)) {
+          targetSize = maxSize;
+        } else {
+          targetSize = minSize;
+          if (_isCategoryExpanded) {
+            setState(() {
+              _isCategoryExpanded = false;
+            });
+          }
+        }
+
+        _sheetController.animateTo(
+          targetSize,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+
       return GestureDetector(
         onVerticalDragUpdate: (details) {
           final screenHeight = MediaQuery.of(context).size.height;
           double newSize =
               _sheetController.size - (details.primaryDelta! / screenHeight);
-          _sheetController.jumpTo(newSize.clamp(0.22, 0.87));
+          _sheetController.jumpTo(newSize.clamp(minSize, 0.87));
 
           if (details.primaryDelta! > 0 && _isCategoryExpanded) {
             setState(() {
@@ -504,12 +533,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
               });
             }
             _sheetController.animateTo(
-              0.22,
+              minSize,
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutQuart,
             );
           } else {
-            const snapSizes = [0.22, 0.45, 0.87];
+            final snapSizes = [minSize, 0.45, 0.87];
             double closest = snapSizes.reduce(
               (a, b) =>
                   (a - currentSize).abs() < (b - currentSize).abs() ? a : b,
@@ -532,86 +561,106 @@ class _MainScreenState extends ConsumerState<MainScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 15, bottom: 15),
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              GestureDetector(
+                onTap: toggleSheet,
+                behavior: HitTestBehavior.opaque,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _isKeepMode
-                          ? 'keep list 💖'
-                          : (selectedCategory.isEmpty
-                                ? '근처 추천 맛집'
-                                : '✨ 추천 $selectedCategory 맛집'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 15, bottom: 15),
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
 
-                    Row(
-                      children: [
-                        Text(
-                          '총 $count곳',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary.withOpacity(0.7),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _isCategoryExpanded = !_isCategoryExpanded;
-                            });
-                            if (_isCategoryExpanded &&
-                                _sheetController.isAttached) {
-                              _sheetController.animateTo(
-                                0.87,
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOutCubic,
-                              );
-                            }
-                          },
-                          child: AnimatedRotation(
-                            turns: _isCategoryExpanded ? 0.5 : 0.0,
-                            duration: const Duration(milliseconds: 300),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                shape: BoxShape.circle,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                _isKeepMode
+                                    ? 'keep list 💖'
+                                    : (selectedCategory.isEmpty
+                                          ? '근처 추천 맛집'
+                                          : '✨ 추천 $selectedCategory 맛집'),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.keyboard_arrow_down,
-                                color: AppColors.textSecondary,
-                                size: 20,
+                              const SizedBox(width: 8),
+                              Text(
+                                '모든 카테고리',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isCategoryExpanded = !_isCategoryExpanded;
+                              });
+                              if (_sheetController.isAttached) {
+                                if (_isCategoryExpanded) {
+                                  if (_sheetController.size < 0.45) {
+                                    _sheetController.animateTo(
+                                      0.45,
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeOutCubic,
+                                    );
+                                  }
+                                } else {
+                                  if (_sheetController.size < 0.5) {
+                                    _sheetController.animateTo(
+                                      minSize,
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeOutCubic,
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            child: AnimatedRotation(
+                              turns: _isCategoryExpanded ? 0.5 : 0.0,
+                              duration: const Duration(milliseconds: 300),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: AppColors.textSecondary,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 15),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 15),
 
               AnimatedCrossFade(
                 duration: const Duration(milliseconds: 300),
@@ -1144,12 +1193,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     key: const ValueKey('bottom_sheet_key'),
                     controller: _sheetController,
                     initialChildSize: 0.45,
-                    minChildSize: 0.22,
+                    minChildSize: minSize,
                     maxChildSize: _isDetailOpen ? 1.0 : 0.87,
                     snap: true,
                     snapSizes: _isDetailOpen
-                        ? const [0.22, 0.65, 1.0]
-                        : const [0.22, 0.45, 0.87],
+                        ? [minSize, 0.65, 1.0]
+                        : [minSize, 0.45, 0.87],
                     builder: (BuildContext context, ScrollController scrollController) {
                       return PointerInterceptor(
                         child: Container(
@@ -1521,6 +1570,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                             scrollController: _isDetailOpen
                                                 ? scrollController
                                                 : null,
+                                            sheetController: _sheetController,
+                                            minSize: minSize,
                                             onBack: () {
                                               setState(() {
                                                 _isDetailOpen = false;
