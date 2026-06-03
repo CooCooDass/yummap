@@ -37,15 +37,28 @@ class CategoryItem extends StatelessWidget {
               ),
             ],
           ),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: isSelected
-                  ? AppColors.primary
-                  : AppColors.textPrimary.withOpacity(0.8),
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.textPrimary.withOpacity(0.8),
+                ),
+              ),
+              if (isSelected) ...[
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.close,
+                  size: 14,
+                  color: AppColors.primary,
+                ),
+              ],
+            ],
           ),
         ),
       ),
