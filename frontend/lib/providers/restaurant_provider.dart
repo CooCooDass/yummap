@@ -1,7 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:js' as js;
 import 'dart:math' as math;
 
@@ -118,8 +117,6 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
     }
 
     final restaurants = _restaurantsForCategory(category);
-
-    _sendMarkers(restaurants);
     if (restaurants.isNotEmpty) {
       js.context.callMethod('moveMap', [
         restaurants.first.latitude,
@@ -217,25 +214,6 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
         restaurant.longitude,
       ),
     );
-  }
-
-  void _sendMarkers(List<Restaurant> restaurants) {
-    final markerData = restaurants
-        .where(
-          (restaurant) => restaurant.latitude != 0 && restaurant.longitude != 0,
-        )
-        .map(
-          (restaurant) => {
-            'id': restaurant.id,
-            'latitude': restaurant.latitude,
-            'longitude': restaurant.longitude,
-            'name': restaurant.name,
-            'grade': restaurant.grade,
-            'categoryType': restaurant.categoryType,
-          },
-        )
-        .toList();
-    js.context.callMethod('setRestaurantMarkers', [json.encode(markerData)]);
   }
 }
 
