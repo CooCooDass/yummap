@@ -23,7 +23,7 @@ class _ChatMessage {
   const _ChatMessage.user(this.text) : isUser = true, restaurants = const [];
 
   const _ChatMessage.bot(this.text, {this.restaurants = const []})
-      : isUser = false;
+    : isUser = false;
 }
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -427,12 +427,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
       if (matchedRestaurants.length > 1) {
         final markerData = matchedRestaurants
-            .map((r) => {
-                  'latitude': r.latitude,
-                  'longitude': r.longitude,
-                })
+            .map((r) => {'latitude': r.latitude, 'longitude': r.longitude})
             .toList();
-        js.context.callMethod('setBoundsToRestaurants', [json.encode(markerData)]);
+        js.context.callMethod('setBoundsToRestaurants', [
+          json.encode(markerData),
+        ]);
       } else {
         final targetRestaurant = matchedRestaurants.first;
         js.context.callMethod('moveMap', [
@@ -484,6 +483,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Calculate precise collapsed size to show exactly 1 restaurant card (85px)
+    // plus the header heights (about 125px) = 210px in total.
+    final minSize = (210.0 / screenHeight).clamp(0.15, 0.4);
+
     ref.listen(filteredRestaurantsProvider, (previous, next) {
       _syncMarkers();
     });
@@ -505,7 +509,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primaryLight : Colors.grey.shade100,
+                color: isSelected
+                    ? AppColors.primaryLight
+                    : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isSelected ? AppColors.primary : Colors.grey.shade300,
@@ -572,12 +578,36 @@ class _MainScreenState extends ConsumerState<MainScreen>
         );
       }).toList();
 
+      void toggleSheet() {
+        if (!_sheetController.isAttached) return;
+        final currentSize = _sheetController.size;
+        final maxSize = _isDetailOpen ? 1.0 : 0.87;
+
+        double targetSize;
+        if (currentSize < (minSize + 0.05)) {
+          targetSize = maxSize;
+        } else {
+          targetSize = minSize;
+          if (_isCategoryExpanded) {
+            setState(() {
+              _isCategoryExpanded = false;
+            });
+          }
+        }
+
+        _sheetController.animateTo(
+          targetSize,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+
       return GestureDetector(
         onVerticalDragUpdate: (details) {
           final screenHeight = MediaQuery.of(context).size.height;
           double newSize =
               _sheetController.size - (details.primaryDelta! / screenHeight);
-          _sheetController.jumpTo(newSize.clamp(0.22, 0.87));
+          _sheetController.jumpTo(newSize.clamp(minSize, 0.87));
 
           if (details.primaryDelta! > 0 && _isCategoryExpanded) {
             setState(() {
@@ -602,12 +632,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
               });
             }
             _sheetController.animateTo(
-              0.22,
+              minSize,
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutQuart,
             );
           } else {
-            const snapSizes = [0.22, 0.45, 0.87];
+            final snapSizes = [minSize, 0.45, 0.87];
             double closest = snapSizes.reduce(
               (a, b) =>
                   (a - currentSize).abs() < (b - currentSize).abs() ? a : b,
@@ -630,90 +660,116 @@ class _MainScreenState extends ConsumerState<MainScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 15, bottom: 15),
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              GestureDetector(
+                onTap: toggleSheet,
+                behavior: HitTestBehavior.opaque,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        _isKeepMode
-                            ? 'keep list 💖'
-                            : (selectedCategory.isEmpty
-                                  ? '근처 추천 맛집'
-                                  : '✨ 추천 $selectedCategory 맛집'),
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 15, bottom: 15),
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
 
-                    Row(
-                      children: [
-                        Text(
-                          '총 $count곳',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary.withOpacity(0.7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _isKeepMode
+                                        ? 'keep list 💖'
+                                        : (selectedCategory.isEmpty
+                                              ? '근처 추천 맛집'
+                                              : '✨ 추천 $selectedCategory 맛집'),
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  '모든 카테고리',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _isCategoryExpanded = !_isCategoryExpanded;
-                            });
-                            if (_isCategoryExpanded &&
-                                _sheetController.isAttached) {
-                              _sheetController.animateTo(
-                                0.87,
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOutCubic,
-                              );
-                            }
-                          },
-                          child: AnimatedRotation(
-                            turns: _isCategoryExpanded ? 0.5 : 0.0,
-                            duration: const Duration(milliseconds: 300),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.keyboard_arrow_down,
-                                color: AppColors.textSecondary,
-                                size: 20,
+                          const SizedBox(width: 8),
+
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isCategoryExpanded = !_isCategoryExpanded;
+                              });
+                              if (_sheetController.isAttached) {
+                                if (_isCategoryExpanded) {
+                                  if (_sheetController.size < 0.45) {
+                                    _sheetController.animateTo(
+                                      0.45,
+                                      duration: const Duration(
+                                        milliseconds: 300,
+                                      ),
+                                      curve: Curves.easeOutCubic,
+                                    );
+                                  }
+                                } else {
+                                  if (_sheetController.size < 0.5) {
+                                    _sheetController.animateTo(
+                                      minSize,
+                                      duration: const Duration(
+                                        milliseconds: 300,
+                                      ),
+                                      curve: Curves.easeOutCubic,
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                            child: AnimatedRotation(
+                              turns: _isCategoryExpanded ? 0.5 : 0.0,
+                              duration: const Duration(milliseconds: 300),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: AppColors.textSecondary,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 15),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 15),
 
               AnimatedCrossFade(
                 duration: const Duration(milliseconds: 300),
@@ -767,10 +823,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     child: Wrap(
                       spacing: 10,
                       runSpacing: 10,
-                      children: [
-                        ...gradeWidgets,
-                        ...categoryWidgets,
-                      ],
+                      children: [...gradeWidgets, ...categoryWidgets],
                     ),
                   ),
                 ),
@@ -804,7 +857,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     animation: _sheetController,
                     builder: (context, child) {
                       final mediaQuery = MediaQuery.of(context);
-                      final safeAreaHeight = mediaQuery.size.height - mediaQuery.padding.top - mediaQuery.padding.bottom;
+                      final safeAreaHeight =
+                          mediaQuery.size.height -
+                          mediaQuery.padding.top -
+                          mediaQuery.padding.bottom;
 
                       double currentSheetSize = 0.45;
                       if (_sheetController.isAttached) {
@@ -814,7 +870,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       }
 
                       final bottomOffset = safeAreaHeight * currentSheetSize;
-                      final showFloatingButtons = currentSheetSize < 0.8 && !_isChatActive;
+                      final showFloatingButtons =
+                          currentSheetSize < 0.8 && !_isChatActive;
 
                       return Stack(
                         clipBehavior: Clip.none,
@@ -870,13 +927,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                         mini: true,
                                         elevation: 4,
                                         child: ShaderMask(
-                                          shaderCallback: (bounds) => const LinearGradient(
-                                            colors: [
-                                              Colors.blue,
-                                              Colors.purple,
-                                              Colors.orange,
-                                            ],
-                                          ).createShader(bounds),
+                                          shaderCallback: (bounds) =>
+                                              const LinearGradient(
+                                                colors: [
+                                                  Colors.blue,
+                                                  Colors.purple,
+                                                  Colors.orange,
+                                                ],
+                                              ).createShader(bounds),
                                           child: const Icon(
                                             Icons.auto_awesome,
                                             color: Colors.white,
@@ -892,7 +950,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                         ),
                                         decoration: BoxDecoration(
                                           color: Colors.black.withOpacity(0.65),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         child: const Text(
                                           'AI 챗',
@@ -985,15 +1045,19 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                   : SizedBox(
                                       key: const ValueKey('search_bar_morph'),
                                       width:
-                                          MediaQuery.of(context).size.width - 110,
+                                          MediaQuery.of(context).size.width -
+                                          110,
                                       height: 50,
                                       child: Autocomplete<String>(
                                         initialValue: TextEditingValue(
                                           text: ref.read(searchQueryProvider),
                                         ),
                                         optionsBuilder:
-                                            (TextEditingValue textEditingValue) {
-                                              final query = textEditingValue.text
+                                            (
+                                              TextEditingValue textEditingValue,
+                                            ) {
+                                              final query = textEditingValue
+                                                  .text
                                                   .trim();
                                               if (query.isEmpty) {
                                                 return const Iterable<
@@ -1050,8 +1114,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                     const SizedBox(width: 15),
                                                     const Icon(
                                                       Icons.search,
-                                                      color:
-                                                          AppColors.textSecondary,
+                                                      color: AppColors
+                                                          .textSecondary,
                                                     ),
                                                     const SizedBox(width: 10),
                                                     Expanded(
@@ -1098,7 +1162,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                 searchQueryProvider
                                                                     .notifier,
                                                               )
-                                                              .updateQuery(value);
+                                                              .updateQuery(
+                                                                value,
+                                                              );
                                                         },
                                                         onSubmitted: (value) {
                                                           _handleSearch(value);
@@ -1109,21 +1175,24 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                               const EdgeInsets.symmetric(
                                                                 vertical: 12,
                                                               ),
-                                                          hintText: '음식점, 주소 검색',
+                                                          hintText:
+                                                              '음식점, 주소 검색',
                                                           hintStyle:
                                                               const TextStyle(
                                                                 color: AppColors
                                                                     .textSecondary,
                                                                 fontSize: 14,
                                                               ),
-                                                          border: InputBorder.none,
+                                                          border:
+                                                              InputBorder.none,
                                                           suffixIcon:
                                                               textEditingController
                                                                   .text
                                                                   .isNotEmpty
                                                               ? IconButton(
                                                                   icon: const Icon(
-                                                                    Icons.cancel,
+                                                                    Icons
+                                                                        .cancel,
                                                                     color: Colors
                                                                         .grey,
                                                                     size: 20,
@@ -1177,8 +1246,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                             top: 8,
                                                           ),
                                                       decoration: BoxDecoration(
-                                                        color:
-                                                            AppColors.background,
+                                                        color: AppColors
+                                                            .background,
                                                         borderRadius:
                                                             BorderRadius.circular(
                                                               20,
@@ -1186,30 +1255,35 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                         boxShadow: [
                                                           BoxShadow(
                                                             color: Colors.black
-                                                                .withOpacity(0.1),
+                                                                .withOpacity(
+                                                                  0.1,
+                                                                ),
                                                             blurRadius: 10,
-                                                            offset: const Offset(
-                                                              0,
-                                                              4,
-                                                            ),
+                                                            offset:
+                                                                const Offset(
+                                                                  0,
+                                                                  4,
+                                                                ),
                                                           ),
                                                         ],
                                                       ),
-                                                      constraints: BoxConstraints(
-                                                        maxHeight: 200,
-                                                        maxWidth:
-                                                            MediaQuery.of(
-                                                              context,
-                                                            ).size.width -
-                                                            110,
-                                                      ),
+                                                      constraints:
+                                                          BoxConstraints(
+                                                            maxHeight: 200,
+                                                            maxWidth:
+                                                                MediaQuery.of(
+                                                                  context,
+                                                                ).size.width -
+                                                                110,
+                                                          ),
                                                       child: ListView.builder(
                                                         padding:
                                                             const EdgeInsets.symmetric(
                                                               vertical: 8,
                                                             ),
                                                         shrinkWrap: true,
-                                                        itemCount: options.length,
+                                                        itemCount:
+                                                            options.length,
                                                         itemBuilder:
                                                             (
                                                               BuildContext
@@ -1243,18 +1317,20 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                       const Icon(
                                                                         Icons
                                                                             .search,
-                                                                        size: 16,
+                                                                        size:
+                                                                            16,
                                                                         color: AppColors
                                                                             .textSecondary,
                                                                       ),
                                                                       const SizedBox(
-                                                                        width: 10,
+                                                                        width:
+                                                                            10,
                                                                       ),
                                                                       Text(
                                                                         option,
                                                                         style: const TextStyle(
-                                                                          color: AppColors
-                                                                              .textPrimary,
+                                                                          color:
+                                                                              AppColors.textPrimary,
                                                                           fontSize:
                                                                               14,
                                                                         ),
@@ -1346,12 +1422,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     key: const ValueKey('bottom_sheet_key'),
                     controller: _sheetController,
                     initialChildSize: 0.45,
-                    minChildSize: 0.22,
+                    minChildSize: minSize,
                     maxChildSize: _isDetailOpen ? 1.0 : 0.87,
                     snap: true,
                     snapSizes: _isDetailOpen
-                        ? const [0.22, 0.65, 1.0]
-                        : const [0.22, 0.45, 0.87],
+                        ? [minSize, 0.65, 1.0]
+                        : [minSize, 0.45, 0.87],
                     builder: (BuildContext context, ScrollController scrollController) {
                       return PointerInterceptor(
                         child: Container(
@@ -1677,11 +1753,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                         .favorite_border,
                                                               color:
                                                                   restaurant
-                                                                          .isFavorite
-                                                                      ? AppColors
-                                                                          .error
-                                                                      : AppColors
-                                                                          .divider,
+                                                                      .isFavorite
+                                                                  ? AppColors
+                                                                        .error
+                                                                  : AppColors
+                                                                        .divider,
                                                             ),
                                                             onPressed: () => ref
                                                                 .read(
@@ -1723,6 +1799,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                             scrollController: _isDetailOpen
                                                 ? scrollController
                                                 : null,
+                                            sheetController: _sheetController,
+                                            minSize: minSize,
                                             onBack: () {
                                               setState(() {
                                                 _isDetailOpen = false;
@@ -1787,9 +1865,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                           child: GestureDetector(
                             onTap: () {},
                             child: Container(
-                              constraints: const BoxConstraints(
-                                maxHeight: 550,
-                              ),
+                              constraints: const BoxConstraints(maxHeight: 550),
                               width: MediaQuery.of(context).size.width,
                               height: MediaQuery.of(context).size.height * 0.55,
                               decoration: BoxDecoration(
@@ -1852,7 +1928,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                     child: ListView.builder(
                                       reverse: true,
                                       padding: const EdgeInsets.all(16),
-                                      itemCount: _chatMessages.length + (_isChatSending ? 1 : 0),
+                                      itemCount:
+                                          _chatMessages.length +
+                                          (_isChatSending ? 1 : 0),
                                       itemBuilder: (context, index) {
                                         if (_isChatSending && index == 0) {
                                           return Align(
@@ -1861,15 +1939,22 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                               margin: const EdgeInsets.only(
                                                 bottom: 12,
                                               ),
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 12,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 12,
+                                                  ),
                                               decoration: BoxDecoration(
                                                 color: Colors.grey.shade200,
-                                                borderRadius: BorderRadius.circular(15).copyWith(
-                                                  bottomLeft: const Radius.circular(0),
-                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                      15,
+                                                    ).copyWith(
+                                                      bottomLeft:
+                                                          const Radius.circular(
+                                                            0,
+                                                          ),
+                                                    ),
                                               ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
@@ -1879,16 +1964,18 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                     height: 14,
                                                     child: CircularProgressIndicator(
                                                       strokeWidth: 2,
-                                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                                        AppColors.primary,
-                                                      ),
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                            Color
+                                                          >(AppColors.primary),
                                                     ),
                                                   ),
                                                   SizedBox(width: 10),
                                                   Text(
                                                     '답변을 생각하고 있어요...',
                                                     style: TextStyle(
-                                                      color: AppColors.textPrimary,
+                                                      color:
+                                                          AppColors.textPrimary,
                                                       fontSize: 14,
                                                     ),
                                                   ),
@@ -1898,7 +1985,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                           );
                                         }
 
-                                        final messageIndex = _isChatSending ? index - 1 : index;
+                                        final messageIndex = _isChatSending
+                                            ? index - 1
+                                            : index;
                                         final msg =
                                             _chatMessages[_chatMessages.length -
                                                 1 -
