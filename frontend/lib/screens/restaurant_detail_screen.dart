@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/restaurant.dart';
 import '../providers/restaurant_provider.dart';
+import '../theme/app_colors.dart';
 
 class RestaurantDetailScreen extends ConsumerStatefulWidget {
   final String restaurantId;
@@ -33,14 +34,14 @@ class _RestaurantDetailScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.orange[50],
+        color: AppColors.primaryLight,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
       ),
       child: Text(
         text,
-        style: TextStyle(
-          color: Colors.deepOrange[700],
+        style: const TextStyle(
+          color: AppColors.secondary,
           fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
@@ -421,8 +422,8 @@ class _RestaurantDetailScreenState
                                 children: [
                                   Text(
                                     _isAllMenusExpanded ? '메뉴 접기' : '모든 메뉴 보기',
-                                    style: TextStyle(
-                                      color: Colors.deepOrange[700],
+                                    style: const TextStyle(
+                                      color: AppColors.secondary,
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -432,7 +433,7 @@ class _RestaurantDetailScreenState
                                     _isAllMenusExpanded
                                         ? Icons.keyboard_arrow_up
                                         : Icons.keyboard_arrow_down,
-                                    color: Colors.deepOrange[700],
+                                    color: AppColors.secondary,
                                     size: 18,
                                   ),
                                 ],

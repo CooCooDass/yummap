@@ -295,7 +295,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       Text(
                         '$index. ${restaurant.name}',
                         style: const TextStyle(
-                          color: AppColors.primary,
+                          color: Colors.black,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
@@ -481,6 +481,83 @@ class _MainScreenState extends ConsumerState<MainScreen>
     }
   }
 
+  Widget _buildFloatingGradeFilter() {
+    final selectedGrade = ref.watch(gradeFilterProvider);
+
+    Widget buildButton(String grade, String emoji, List<Color> gradientColors) {
+      final isSelected = selectedGrade == grade;
+      return GestureDetector(
+        onTap: () {
+          ref.read(gradeFilterProvider.notifier).toggleGrade(grade);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: isSelected
+                ? LinearGradient(
+                    colors: gradientColors,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isSelected ? null : Colors.white,
+            border: Border.all(
+              color: isSelected ? Colors.transparent : Colors.grey.shade300,
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isSelected ? 0.15 : 0.05),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            emoji,
+            style: const TextStyle(fontSize: 20),
+          ),
+        ),
+      );
+    }
+
+    return Positioned(
+      top: 90,
+      left: 20,
+      child: PointerInterceptor(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildButton('GOLD', '🥇', [const Color(0xFFFFF176), const Color(0xFFFBC02D)]),
+              const SizedBox(height: 12),
+              buildButton('SILVER', '🥈', [const Color(0xFFE2E2E2), const Color(0xFF9E9E9E)]),
+              const SizedBox(height: 12),
+              buildButton('BRONZE', '🥉', [const Color(0xFFFFCC80), const Color(0xFFD84315)]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -496,71 +573,40 @@ class _MainScreenState extends ConsumerState<MainScreen>
     final asyncCategories = ref.watch(categorySummariesProvider);
     final asyncDisplayedRestaurants = ref.watch(filteredRestaurantsProvider);
     Widget buildSheetHeader(int count) {
-      Widget buildGradeButton(String grade, String label) {
-        final selectedGrade = ref.watch(gradeFilterProvider);
-        final isSelected = selectedGrade == grade;
-        return GestureDetector(
-          onTap: () {
-            ref.read(gradeFilterProvider.notifier).toggleGrade(grade);
-          },
-          child: Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.primaryLight : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected ? AppColors.primary : Colors.grey.shade300,
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isSelected ? 0.08 : 0.03),
-                    blurRadius: 5,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.textPrimary.withOpacity(0.8),
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-
-      final gradeWidgets = [
-        buildGradeButton('GOLD', '🥇 Gold'),
-        buildGradeButton('SILVER', '🥈 Silver'),
-        buildGradeButton('BRONZE', '🥉 Bronze'),
-      ];
-
-      final verticalDivider = Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: Container(
-          width: 1.5,
-          height: 24,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(1),
-          ),
-        ),
-      );
-
       final categoryNames = asyncCategories.maybeWhen(
-        data: (categories) => categories
-            .map((category) => category.name)
-            .where((name) => name.isNotEmpty)
-            .toList(),
+        data: (categories) {
+          final list = categories
+              .map((category) => category.name)
+              .where((name) => name.isNotEmpty)
+              .toList();
+
+          const popularOrder = [
+            '한식',
+            '일식',
+            '중식',
+            '양식',
+            '아시안',
+            '분식',
+            '고기',
+            '카페',
+            '디저트',
+            '술집',
+          ];
+
+          list.sort((a, b) {
+            final indexA = popularOrder.indexOf(a);
+            final indexB = popularOrder.indexOf(b);
+
+            if (indexA != -1 && indexB != -1) {
+              return indexA.compareTo(indexB);
+            }
+            if (indexA != -1) return -1;
+            if (indexB != -1) return 1;
+            return a.compareTo(b);
+          });
+
+          return list;
+        },
         orElse: () => const <String>[],
       );
 
@@ -786,8 +832,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          ...gradeWidgets,
-                          verticalDivider,
                           ...categoryWidgets,
                         ],
                       ),
@@ -813,7 +857,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
                       spacing: 10,
                       runSpacing: 10,
                       children: [
-                        ...gradeWidgets,
                         ...categoryWidgets,
                       ],
                     ),
@@ -844,6 +887,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     right: 0,
                     child: const MapScreen(),
                   ),
+
+                  _buildFloatingGradeFilter(),
 
                   AnimatedBuilder(
                     animation: _sheetController,
@@ -973,9 +1018,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         decoration: BoxDecoration(
                           color: AppColors.background,
                           borderRadius: BorderRadius.circular(25),
+                          border: Border.all(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black.withOpacity(0.08),
                               blurRadius: 10,
                             ),
                           ],
@@ -1082,10 +1131,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                   color: AppColors.background,
                                                   borderRadius:
                                                       BorderRadius.circular(25),
+                                                  border: Border.all(
+                                                    color: AppColors.primary,
+                                                    width: 1.5,
+                                                  ),
                                                   boxShadow: [
                                                     BoxShadow(
                                                       color: Colors.black
-                                                          .withOpacity(0.1),
+                                                          .withOpacity(0.08),
                                                       blurRadius: 10,
                                                     ),
                                                   ],
@@ -1096,7 +1149,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                     const Icon(
                                                       Icons.search,
                                                       color:
-                                                          AppColors.textSecondary,
+                                                          AppColors.secondary,
                                                     ),
                                                     const SizedBox(width: 10),
                                                     Expanded(
@@ -1344,42 +1397,42 @@ class _MainScreenState extends ConsumerState<MainScreen>
                           height: 50,
                           width: 60,
                           decoration: BoxDecoration(
-                            color: _isKeepMode
-                                ? AppColors.error
-                                : AppColors.background,
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 5,
-                              ),
-                            ],
-                            border: Border.all(
-                              color: _isKeepMode
-                                  ? Colors.transparent
-                                  : AppColors.error.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.favorite,
-                                color: _isKeepMode
-                                    ? Colors.white
-                                    : AppColors.error,
-                                size: 20,
-                              ),
-                              Text(
-                                'keep',
-                                style: TextStyle(
-                                  color: _isKeepMode
-                                      ? Colors.white
-                                      : AppColors.error,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                                                            color: _isKeepMode
+                                                                ? AppColors.secondary
+                                                                : AppColors.background,
+                                                            borderRadius: BorderRadius.circular(15),
+                                                            boxShadow: [
+                                                              BoxShadow(
+                                                                color: Colors.black.withOpacity(0.1),
+                                                                blurRadius: 5,
+                                                              ),
+                                                            ],
+                                                            border: Border.all(
+                                                              color: _isKeepMode
+                                                                  ? Colors.transparent
+                                                                  : AppColors.secondary.withOpacity(0.3),
+                                                            ),
+                                                          ),
+                                                          child: Column(
+                                                            mainAxisAlignment: MainAxisAlignment.center,
+                                                            children: [
+                                                              Icon(
+                                                                Icons.favorite,
+                                                                color: _isKeepMode
+                                                                    ? Colors.white
+                                                                    : AppColors.secondary,
+                                                                size: 20,
+                                                              ),
+                                                              Text(
+                                                                'keep',
+                                                                style: TextStyle(
+                                                                  color: _isKeepMode
+                                                                      ? Colors.white
+                                                                      : AppColors.secondary,
+                                                                  fontSize: 10,
+                                                                  fontWeight: FontWeight.bold,
+                                                                ),
+                                                              ),
                             ],
                           ),
                         ),
