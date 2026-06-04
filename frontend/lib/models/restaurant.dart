@@ -74,6 +74,47 @@ class Restaurant {
 
   String get category => categories.isNotEmpty ? categories.first : '음식점';
 
+  String get categoryType {
+    // Check if categories contain Cafe-related terms
+    final hasCafe = categories.any((c) {
+      final lower = c.toLowerCase();
+      return c == '카페' || 
+             c == '커피숍' || 
+             c == '디저트카페' || 
+             c == '베이커리' || 
+             c == '빵' || 
+             lower == 'cafe' || 
+             lower == 'coffee' ||
+             lower == 'bakery';
+    });
+    if (hasCafe) return 'cafe';
+
+    // Check if categories contain Pub-related terms
+    final hasPub = categories.any((c) {
+      final lower = c.toLowerCase();
+      return c == '술집' || 
+             c == '포차' || 
+             c == '포장마차' || 
+             c == '이자카야' || 
+             c == '호프' || 
+             c == '맥주' || 
+             c == '주점' || 
+             c == '선술집' || 
+             c == '바' || 
+             c == '와인바' || 
+             lower == 'pub' || 
+             lower == 'bar' || 
+             lower == 'pocha' || 
+             lower == 'izakaya';
+    });
+    if (hasPub) return 'pub';
+
+    // Default is Bob-jib (food)
+    return 'food';
+  }
+
+
+
   const Restaurant({
     required this.id,
     required this.name,

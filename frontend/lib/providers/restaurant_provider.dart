@@ -125,6 +125,7 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
             'longitude': restaurant.longitude,
             'name': restaurant.name,
             'grade': restaurant.grade,
+            'categoryType': restaurant.categoryType,
           },
         )
         .toList();

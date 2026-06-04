@@ -132,6 +132,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                 'longitude': r.longitude,
                 'name': r.name,
                 'grade': r.grade,
+                'categoryType': r.categoryType,
               },
             )
             .toList();
@@ -191,6 +192,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
             'longitude': r.longitude,
             'name': r.name,
             'grade': r.grade,
+            'categoryType': r.categoryType,
             'isSelected':
                 (r.id == _selectedRestaurantId || r.id == _detailRestaurantId),
           },
