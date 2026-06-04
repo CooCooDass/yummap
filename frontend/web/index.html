@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
@@ -19,6 +20,7 @@
     let searchMarker;
     let searchOverlay;
     let currentMarkers = [];
+    let currentOverlays = [];
     let initialLat = 37.33859;
     let initialLng = 127.92599;
 
@@ -32,7 +34,7 @@
         return;
       }
       if (!window.__kakaoMapsReady && typeof kakao.maps.load === 'function') {
-        kakao.maps.load(function() {
+        kakao.maps.load(function () {
           window.__kakaoMapsReady = true;
           initKakaoMap(container);
         });
@@ -52,15 +54,34 @@
         position: initialPos,
         image: markerImage
       });
+
+      kakao.maps.event.addListener(kakaoMap, 'zoom_changed', function () {
+        updateLabelVisibility();
+      });
     }
 
-    window.moveMap = function(lat, lng, level) {
+    window.moveMap = function (lat, lng, level) {
       if (!kakaoMap) return;
       const targetLatLon = new kakao.maps.LatLng(lat, lng);
       if (typeof level === 'number' && level > 0) {
         kakaoMap.setLevel(level);
       }
       kakaoMap.panTo(targetLatLon);
+    };
+
+    window.setBoundsToRestaurants = function (coordsJson) {
+      if (!kakaoMap) return;
+      const coords = JSON.parse(coordsJson);
+      if (!coords || coords.length === 0) return;
+
+      const bounds = new kakao.maps.LatLngBounds();
+      coords.forEach(function (c) {
+        if (c.latitude && c.longitude) {
+          bounds.extend(new kakao.maps.LatLng(c.latitude, c.longitude));
+        }
+      });
+      // Fit to bounds with padding (top, right, bottom, left)
+      kakaoMap.setBounds(bounds, 90, 30, 240, 30);
     };
 
     function updateUserMarker(lat, lng) {
@@ -80,7 +101,7 @@
       });
 
       if (placeName) {
-        const safePlaceName = String(placeName).replace(/[&<>"']/g, function(match) {
+        const safePlaceName = String(placeName).replace(/[&<>"']/g, function (match) {
           return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match];
         });
         searchOverlay = new kakao.maps.CustomOverlay({
@@ -111,7 +132,20 @@
       }
     }
 
-    window.setRestaurantMarkers = function(restaurantsJson) {
+    function updateLabelVisibility() {
+      if (!kakaoMap) return;
+      const level = kakaoMap.getLevel();
+      const labels = document.querySelectorAll('.marker-label');
+      labels.forEach(function (label) {
+        if (label.classList.contains('selected')) {
+          label.style.display = 'block';
+        } else {
+          label.style.display = level <= 5 ? 'block' : 'none';
+        }
+      });
+    }
+
+    window.setRestaurantMarkers = function (restaurantsJson) {
       if (!kakaoMap) return;
 
       for (let i = 0; i < currentMarkers.length; i++) {
@@ -119,22 +153,24 @@
       }
       currentMarkers = [];
 
+      for (let i = 0; i < currentOverlays.length; i++) {
+        currentOverlays[i].setMap(null);
+      }
+      currentOverlays = [];
+
       const restaurants = JSON.parse(restaurantsJson);
-      restaurants.forEach(function(res) {
+      restaurants.forEach(function (res) {
         const markerPosition = new kakao.maps.LatLng(res.latitude, res.longitude);
-        const imageUrl = res.grade === 'gold'
-          ? './icons/Gold_pin.png'
-          : res.grade === 'silver'
-            ? './icons/Silver_pin.png'
-            : './icons/Bronze_pin.png';
-        const scale = res.isSelected ? 1.3 : 1.0;
-        const width = 28 * scale;
-        const height = 40 * scale;
+        const imageUrl = './icons/' + (res.categoryType || 'food') + '_' + (res.grade || 'bronze') + '.png';
+        const scale = res.isSelected ? 1.35 : 1.0;
+        const width = 35 * scale;
+        const height = 50 * scale;
         const markerImage = new kakao.maps.MarkerImage(
           imageUrl,
           new kakao.maps.Size(width, height),
           { offset: new kakao.maps.Point(width / 2, height) }
         );
+
 
         const marker = new kakao.maps.Marker({
           position: markerPosition,
@@ -145,7 +181,24 @@
 
         marker.setMap(kakaoMap);
         currentMarkers.push(marker);
-        kakao.maps.event.addListener(marker, 'click', function() {
+
+        const safeName = String(res.name).replace(/[&<>"']/g, function (match) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match];
+        });
+
+        const isVisible = (kakaoMap.getLevel() <= 5 || res.isSelected) ? 'block' : 'none';
+        const labelClass = res.isSelected ? 'marker-label selected' : 'marker-label';
+
+        const overlay = new kakao.maps.CustomOverlay({
+          map: kakaoMap,
+          position: markerPosition,
+          content: `<div class="${labelClass}" style="display: ${isVisible}">${safeName}</div>`,
+          yAnchor: 0.0
+        });
+        overlay.setMap(kakaoMap);
+        currentOverlays.push(overlay);
+
+        kakao.maps.event.addListener(marker, 'click', function () {
           if (window.onMarkerClicked) {
             window.onMarkerClicked(res.id);
           }
@@ -159,16 +212,42 @@
       padding: 4px 12px;
       border-radius: 20px;
       border: 1.5px solid #007AFF;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
       font-size: 13px;
       font-weight: 700;
       color: #007AFF;
       margin-top: 5px;
       white-space: nowrap;
     }
+
+    .marker-label {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #222222;
+      white-space: nowrap;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+      pointer-events: none;
+      margin-top: 4px;
+    }
+
+    .marker-label.selected {
+      background: #222222;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      padding: 3px 8px;
+    }
   </style>
 </head>
+
 <body>
   <script src="flutter_bootstrap.js" async></script>
 </body>
+
 </html>

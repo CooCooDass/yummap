@@ -81,14 +81,26 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
             lng: lng,
             limit: 100,
           );
-    _sendMarkers(restaurants);
-    if (restaurants.isNotEmpty) {
+
+    // Sort by grade standard: gold -> silver -> bronze -> default
+    final sortedRestaurants = List<Restaurant>.from(restaurants);
+    sortedRestaurants.sort((a, b) {
+      final pA = _gradePriority(a.grade);
+      final pB = _gradePriority(b.grade);
+      if (pA != pB) {
+        return pA.compareTo(pB);
+      }
+      return a.name.compareTo(b.name);
+    });
+
+    _sendMarkers(sortedRestaurants);
+    if (sortedRestaurants.isNotEmpty) {
       js.context.callMethod('moveMap', [
-        restaurants.first.latitude,
-        restaurants.first.longitude,
+        sortedRestaurants.first.latitude,
+        sortedRestaurants.first.longitude,
       ]);
     }
-    return restaurants;
+    return sortedRestaurants;
   }
 
   Future<Restaurant> fetchDetail(String id) {
@@ -125,6 +137,7 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
             'longitude': restaurant.longitude,
             'name': restaurant.name,
             'grade': restaurant.grade,
+            'categoryType': restaurant.categoryType,
           },
         )
         .toList();
@@ -144,21 +157,65 @@ final restaurantDetailProvider = FutureProvider.family<Restaurant, String>((
   return YumapApiService.fetchRestaurantDetail(rid);
 });
 
+class GradeFilterNotifier extends Notifier<String> {
+  @override
+  String build() => 'ALL';
+
+  void toggleGrade(String grade) {
+    state = state == grade ? 'ALL' : grade;
+  }
+}
+
+final gradeFilterProvider = NotifierProvider<GradeFilterNotifier, String>(
+  () => GradeFilterNotifier(),
+);
+
 final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((
   ref,
 ) {
   final asyncRestaurants = ref.watch(restaurantProvider);
   final searchQuery = ref.watch(searchQueryProvider);
+  final selectedGrade = ref.watch(gradeFilterProvider);
 
   return asyncRestaurants.whenData((restaurants) {
-    return restaurants.where((restaurant) {
+    final filtered = restaurants.where((restaurant) {
       if (searchQuery.isNotEmpty && !_matchesSearch(restaurant, searchQuery)) {
         return false;
       }
+      if (selectedGrade != 'ALL' && selectedGrade.isNotEmpty) {
+        if (restaurant.grade.toUpperCase() != selectedGrade.toUpperCase()) {
+          return false;
+        }
+      }
       return true;
     }).toList();
+
+    // Sort by grade: gold -> silver -> bronze -> default
+    filtered.sort((a, b) {
+      final pA = _gradePriority(a.grade);
+      final pB = _gradePriority(b.grade);
+      if (pA != pB) {
+        return pA.compareTo(pB);
+      }
+      return a.name.compareTo(b.name);
+    });
+
+    return filtered;
   });
 });
+
+int _gradePriority(String grade) {
+  switch (grade.toLowerCase()) {
+    case 'gold':
+      return 1;
+    case 'silver':
+      return 2;
+    case 'bronze':
+      return 3;
+    default:
+      return 4;
+  }
+}
 
 final favoriteRestaurantsProvider = Provider<List<Restaurant>>((ref) {
   final asyncRestaurants = ref.watch(filteredRestaurantsProvider);

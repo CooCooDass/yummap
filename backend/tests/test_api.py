@@ -61,6 +61,21 @@ def test_restaurant_detail() -> None:
     assert isinstance(payload["categories"], list)
 
 
+def test_restaurant_detail_normalizes_phone_and_hours() -> None:
+    response = client.get("/restaurants/fcv2T7LiRoBV")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["phone"] == "0507-1310-1655"
+
+    weekly = payload["hours"]["weekly"]
+    assert weekly
+    assert all(row["date"] for row in weekly)
+    assert {"월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"} <= {
+        row["date"] for row in weekly
+    }
+    assert any(row["date"] == "목요일" and "브레이크타임" in row["hours"] for row in weekly)
+
+
 def test_search_category_and_restaurant() -> None:
     category_response = client.get("/search?q=돈까스&limit=10")
     assert category_response.status_code == 200
