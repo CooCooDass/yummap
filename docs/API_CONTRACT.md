@@ -53,7 +53,7 @@ Used for smoke checks. Important fields:
 
 ### `GET /categories`
 
-Returns the production category list used for frontend category chips. Do not hardcode a separate frontend category set.
+Returns the production category list. It remains available for compatibility, but the Flutter web app should prefer `/bootstrap` for initial category chips and category indices.
 
 ```json
 [
@@ -66,9 +66,43 @@ Returns the production category list used for frontend category chips. Do not ha
 ]
 ```
 
+### `GET /bootstrap?lat=&lng=&limit=`
+
+Primary initial data source for Flutter web. It returns the full restaurant summary list plus category `rid/rank` indices so category and grade filters can run client-side without repeated backend requests.
+
+```json
+{
+  "restaurants": [
+    {
+      "rid": "abc",
+      "name": "식당명",
+      "grade": "gold",
+      "distance_km": 0.25,
+      "latitude": 37.3422,
+      "longitude": 127.9202,
+      "road_address": "강원 원주시 ...",
+      "categories": ["일식", "돈카츠"],
+      "meal_types": ["점심"],
+      "recommendation_tags": ["가족"]
+    }
+  ],
+  "categories": [
+    {
+      "name": "막국수",
+      "query": "막국수",
+      "total_count": 100,
+      "main_page_index": 1,
+      "restaurants": [{ "rid": "abc", "rank": 1 }]
+    }
+  ]
+}
+```
+
+Category screens must use `categories[].restaurants` order as the source of truth. Do not derive category membership from `restaurants[].categories` alone.
+
 ### `GET /restaurants?lat=&lng=&limit=`
 
-Default nearby/recommended list source when no category is selected. Each restaurant summary may include:
+Compatibility/default nearby list source. New Flutter web initial loading should use `/bootstrap`. Each restaurant summary may include:
 
 ```json
 {
@@ -102,7 +136,7 @@ Detail panel source. It extends the summary shape with:
 
 ### `GET /categories/{category_name}/restaurants?lat=&lng=&limit=`
 
-Returns category-scoped rankings. Category result lists must use this endpoint with `limit=100`; frontend local filtering of the full restaurant list is not allowed for category screens.
+Returns category-scoped rankings. It remains the backend source of truth and compatibility endpoint. In Flutter web, after `/bootstrap`, category result lists should be derived from the bootstrap category index rather than refetching this endpoint on each click.
 
 ```json
 {

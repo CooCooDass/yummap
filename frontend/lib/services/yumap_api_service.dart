@@ -44,6 +44,25 @@ class YumapApiService {
         .toList();
   }
 
+  static Future<BootstrapData> fetchBootstrap({
+    double? lat,
+    double? lng,
+    int limit = 2000,
+  }) async {
+    final response = await http.get(
+      _uriWithQuery('/bootstrap', {
+        'limit': limit.toString(),
+        if (lat != null) 'lat': lat.toString(),
+        if (lng != null) 'lng': lng.toString(),
+      }),
+    );
+    final payload = _decodeResponse(response);
+    if (payload is! Map) {
+      throw const YumapApiException('초기 데이터 응답 형식이 올바르지 않습니다.');
+    }
+    return BootstrapData.fromJson(Map<String, dynamic>.from(payload));
+  }
+
   static Future<List<CategorySummary>> fetchCategories() async {
     final response = await http.get(_uri('/categories'));
     final payload = _decodeResponse(response);
@@ -144,6 +163,37 @@ class YumapApiService {
   }
 }
 
+class BootstrapData {
+  final List<Restaurant> restaurants;
+  final List<BootstrapCategory> categories;
+
+  const BootstrapData({required this.restaurants, required this.categories});
+
+  factory BootstrapData.fromJson(Map<String, dynamic> json) {
+    return BootstrapData(
+      restaurants: json['restaurants'] is List
+          ? (json['restaurants'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) =>
+                      Restaurant.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList()
+          : const [],
+      categories: json['categories'] is List
+          ? (json['categories'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) => BootstrapCategory.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : const [],
+    );
+  }
+}
+
 class CategorySummary {
   final String name;
   final String query;
@@ -163,6 +213,51 @@ class CategorySummary {
       query: json['query']?.toString() ?? '',
       totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
       mainPageIndex: (json['main_page_index'] as num?)?.toInt(),
+    );
+  }
+}
+
+class BootstrapCategory extends CategorySummary {
+  final List<CategoryRestaurantRef> restaurants;
+
+  const BootstrapCategory({
+    required super.name,
+    required super.query,
+    required super.totalCount,
+    super.mainPageIndex,
+    required this.restaurants,
+  });
+
+  factory BootstrapCategory.fromJson(Map<String, dynamic> json) {
+    return BootstrapCategory(
+      name: json['name']?.toString() ?? '',
+      query: json['query']?.toString() ?? '',
+      totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
+      mainPageIndex: (json['main_page_index'] as num?)?.toInt(),
+      restaurants: json['restaurants'] is List
+          ? (json['restaurants'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) => CategoryRestaurantRef.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : const [],
+    );
+  }
+}
+
+class CategoryRestaurantRef {
+  final String rid;
+  final int? rank;
+
+  const CategoryRestaurantRef({required this.rid, this.rank});
+
+  factory CategoryRestaurantRef.fromJson(Map<String, dynamic> json) {
+    return CategoryRestaurantRef(
+      rid: json['rid']?.toString() ?? '',
+      rank: (json['rank'] as num?)?.toInt(),
     );
   }
 }

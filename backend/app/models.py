@@ -27,6 +27,20 @@ class CategorySummary(BaseModel):
     main_page_index: int | None = None
 
 
+class CategoryRestaurantRef(BaseModel):
+    rid: str
+    rank: int | None = None
+
+
+class BootstrapCategory(CategorySummary):
+    restaurants: list[CategoryRestaurantRef] = Field(default_factory=list)
+
+
+class BootstrapResponse(BaseModel):
+    restaurants: list[RestaurantSummary]
+    categories: list[BootstrapCategory]
+
+
 class CategoryRestaurantsResponse(BaseModel):
     category: str
     restaurants: list[RestaurantSummary]

@@ -7,6 +7,7 @@ from .config import Settings, get_settings
 from .data_store import DataStore
 from .gemini import GeminiClient, GeminiError
 from .models import (
+    BootstrapResponse,
     CategoryRestaurantsResponse,
     CategorySummary,
     ChatRequest,
@@ -67,6 +68,48 @@ def create_app() -> FastAPI:
             }
             for row in store.list_categories()
         ]
+
+    @app.get("/bootstrap", response_model=BootstrapResponse)
+    def bootstrap(
+        lat: float | None = None,
+        lng: float | None = None,
+        limit: int = Query(default=2000, ge=1, le=2500),
+        store: DataStore = Depends(get_store),
+    ) -> dict[str, object]:
+        restaurant_rows = [
+            restaurant_summary(row, lat=lat, lng=lng) for row in store.list_restaurants()
+        ]
+        grade_order = {"gold": 0, "silver": 1, "bronze": 2}
+        restaurant_rows.sort(
+            key=lambda row: (
+                row.get("distance_km") is None,
+                row.get("distance_km") or 999999,
+                grade_order.get(str(row.get("grade") or "").lower(), 9),
+                str(row.get("name") or ""),
+            )
+        )
+
+        category_rows = []
+        for row in store.list_categories():
+            refs = [
+                {
+                    "rid": item.get("rid"),
+                    "rank": item.get("rank"),
+                }
+                for item in row.get("restaurants") or []
+                if item.get("rid")
+            ]
+            category_rows.append(
+                {
+                    "name": row["name"],
+                    "query": row.get("query"),
+                    "total_count": row.get("total_count"),
+                    "main_page_index": row.get("main_page_index"),
+                    "restaurants": refs,
+                }
+            )
+
+        return {"restaurants": restaurant_rows[:limit], "categories": category_rows}
 
     @app.get("/categories/{category_name}/restaurants", response_model=CategoryRestaurantsResponse)
     def category_restaurants(

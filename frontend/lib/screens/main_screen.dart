@@ -333,7 +333,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   void _openRestaurantFromChat(ChatRestaurantResult result) {
     Restaurant? matched;
-    final restaurants = ref.read(restaurantProvider).value ?? [];
+    final restaurants = ref.read(restaurantProvider.notifier).allRestaurants;
     for (final restaurant in restaurants) {
       if (restaurant.id == result.rid) {
         matched = restaurant;
@@ -402,7 +402,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
       _isDetailOpen = false;
     });
 
-    final allRestaurants = ref.read(restaurantProvider).value ?? [];
+    final allRestaurants = ref.read(restaurantProvider.notifier).allRestaurants;
 
     bool matchesSearch(Restaurant restaurant, String query) {
       final normalized = query.toLowerCase().replaceAll(' ', '');

@@ -41,6 +41,35 @@ def test_category_restaurants_keeps_rank() -> None:
     assert all(row["distance_km"] is not None for row in payload["restaurants"])
 
 
+def test_bootstrap_contains_category_index() -> None:
+    response = client.get("/bootstrap?lat=37.3422&lng=127.9202")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["restaurants"]) == 1989
+    assert len(payload["categories"]) == 45
+    restaurant_rids = {row["rid"] for row in payload["restaurants"]}
+
+    for category in payload["categories"]:
+        refs = category["restaurants"]
+        assert len(refs) <= 100
+        assert [row["rank"] for row in refs] == sorted(row["rank"] for row in refs)
+        assert all(row["rid"] in restaurant_rids for row in refs)
+
+
+def test_bootstrap_category_index_matches_category_endpoint() -> None:
+    bootstrap_response = client.get("/bootstrap?lat=37.3422&lng=127.9202")
+    category_response = client.get("/categories/막국수/restaurants?lat=37.3422&lng=127.9202&limit=100")
+    assert bootstrap_response.status_code == 200
+    assert category_response.status_code == 200
+
+    category = next(
+        row for row in bootstrap_response.json()["categories"] if row["name"] == "막국수"
+    )
+    bootstrap_rids = [row["rid"] for row in category["restaurants"]]
+    endpoint_rids = [row["rid"] for row in category_response.json()["restaurants"]]
+    assert bootstrap_rids == endpoint_rids
+
+
 def test_restaurants_list_for_frontend() -> None:
     response = client.get("/restaurants?lat=37.3422&lng=127.9202&limit=20")
     assert response.status_code == 200
