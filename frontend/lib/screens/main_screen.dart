@@ -1064,11 +1064,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                   String
                                                 >.empty();
                                               }
-                                              final restaurants =
-                                                  ref
-                                                      .read(restaurantProvider)
-                                                      .value ??
-                                                  const <Restaurant>[];
+                                              final restaurants = ref
+                                                  .read(
+                                                    restaurantProvider.notifier,
+                                                  )
+                                                  .allRestaurants;
                                               return restaurants
                                                   .map(
                                                     (restaurant) =>

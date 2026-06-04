@@ -311,7 +311,10 @@ final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((
   final selectedCategory = ref.watch(categoryProvider);
 
   return asyncRestaurants.whenData((restaurants) {
-    final filtered = restaurants.where((restaurant) {
+    final baseRestaurants = searchQuery.isEmpty
+        ? restaurants
+        : ref.read(restaurantProvider.notifier).allRestaurants;
+    final filtered = baseRestaurants.where((restaurant) {
       if (searchQuery.isNotEmpty && !_matchesSearch(restaurant, searchQuery)) {
         return false;
       }
@@ -323,7 +326,7 @@ final filteredRestaurantsProvider = Provider<AsyncValue<List<Restaurant>>>((
       return true;
     }).toList();
 
-    if (selectedCategory.isEmpty) {
+    if (selectedCategory.isEmpty || searchQuery.isNotEmpty) {
       filtered.sort(_compareFullList);
     }
 
