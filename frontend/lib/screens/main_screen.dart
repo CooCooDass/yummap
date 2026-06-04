@@ -47,7 +47,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
   TextEditingController? _autoCompleteController;
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
-  late AnimationController _animationController;
 
   final FocusNode _chatFocusNode = FocusNode();
   final TextEditingController _chatInputController = TextEditingController();
