@@ -25,9 +25,27 @@ class RestaurantDetailScreen extends ConsumerStatefulWidget {
       _RestaurantDetailScreenState();
 }
 
+class _DaySchedule {
+  final String day;
+  String openHours;
+  String? lastOrder;
+  final List<String> breakTimes = [];
+
+  _DaySchedule({required this.day, required this.openHours});
+}
+
 class _RestaurantDetailScreenState
     extends ConsumerState<RestaurantDetailScreen> {
   bool _isAllMenusExpanded = false;
+  static const List<String> _dayOrder = [
+    '월요일',
+    '화요일',
+    '수요일',
+    '목요일',
+    '금요일',
+    '토요일',
+    '일요일',
+  ];
 
   Widget _buildTag(String text) {
     return Container(
@@ -69,6 +87,169 @@ class _RestaurantDetailScreenState
         ],
       ),
     );
+  }
+
+  Widget _buildHoursInfo(RestaurantHours hours) {
+    final schedules = _buildDaySchedules(hours);
+    if (schedules.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.access_time, color: Colors.grey, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final entry in schedules.asMap().entries) ...[
+                    _buildDaySchedule(entry.value),
+                    if (entry.key != schedules.length - 1)
+                      Divider(
+                        height: 16,
+                        thickness: 0.6,
+                        color: Colors.grey.shade200,
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_DaySchedule> _buildDaySchedules(RestaurantHours hours) {
+    final schedules = {
+      for (final day in _dayOrder)
+        day: _DaySchedule(day: day, openHours: '영업시간 정보 없음'),
+    };
+    var lastOrderIndex = 0;
+
+    for (final hour in hours.weekly) {
+      final day = hour.date.trim();
+      if (!schedules.containsKey(day)) {
+        continue;
+      }
+      final value = hour.hours.trim();
+      if (value.isEmpty) {
+        continue;
+      }
+
+      final current = schedules[day]!;
+      if (_isBreakTime(value)) {
+        current.breakTimes.add(_formatBreakTime(value));
+        continue;
+      }
+
+      current.openHours = _formatHours(value);
+      if (!_isClosed(value) && lastOrderIndex < hours.lastOrders.length) {
+        current.lastOrder = hours.lastOrders[lastOrderIndex].trim();
+        lastOrderIndex += 1;
+      }
+    }
+
+    return _dayOrder.map((day) => schedules[day]!).toList();
+  }
+
+  Widget _buildDaySchedule(_DaySchedule schedule) {
+    final openText = schedule.lastOrder == null || schedule.lastOrder!.isEmpty
+        ? schedule.openHours
+        : '${schedule.openHours} ( Last order : ${schedule.lastOrder} )';
+    final breakText = schedule.breakTimes.isEmpty
+        ? '브레이크 타임 정보 없음'
+        : schedule.breakTimes.join('\n');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDayCell(schedule.day),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                openText,
+                style: TextStyle(
+                  color: _isClosed(schedule.openHours)
+                      ? Colors.redAccent
+                      : Colors.black87,
+                  fontSize: 13,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDayCell(''),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                breakText,
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 13,
+                  height: 1.35,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDayCell(String day) {
+    return SizedBox(
+      width: 48,
+      child: Text(
+        day,
+        style: TextStyle(
+          color: Colors.grey.shade800,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  String _formatHours(String value) {
+    return value.replaceAll(RegExp(r'\s*-\s*'), ' ~ ');
+  }
+
+  String _formatBreakTime(String value) {
+    final normalized = value
+        .replaceFirst(RegExp(r'브레이크\s*타임|브레이크타임'), '브레이크타임')
+        .replaceFirst(RegExp(r'브레이크타임\s*:\s*'), '')
+        .replaceAll(RegExp(r'\s*-\s*'), ' ~ ');
+    return '브레이크타임 : $normalized';
+  }
+
+  bool _isBreakTime(String value) {
+    return value.contains('브레이크');
+  }
+
+  bool _isClosed(String value) {
+    return value.contains('휴무');
   }
 
   Widget _buildMenuItem(MenuItem menu) {
@@ -370,12 +551,7 @@ class _RestaurantDetailScreenState
                   _buildInfoRow(Icons.location_on, restaurant.roadAddress),
                 if (restaurant.hours != null &&
                     restaurant.hours!.weekly.isNotEmpty)
-                  _buildInfoRow(
-                    Icons.access_time,
-                    restaurant.hours!.weekly
-                        .map((hour) => '${hour.date} ${hour.hours}')
-                        .join('\n'),
-                  ),
+                  _buildHoursInfo(restaurant.hours!),
                 if (restaurant.phone.isNotEmpty)
                   _buildInfoRow(Icons.phone, restaurant.phone),
                 const SizedBox(height: 45),

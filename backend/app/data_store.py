@@ -9,6 +9,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from .config import Settings
+from .normalization import normalize_restaurant_row
 from .query_aliases import CATEGORY_ALIASES, query_tokens
 
 
@@ -93,7 +94,7 @@ class DataStore:
     def list_restaurants(self) -> list[dict[str, Any]]:
         if self.settings.has_supabase:
             try:
-                return self._supabase_get(
+                rows = self._supabase_get(
                     "restaurants",
                     {
                         "select": RESTAURANT_COLUMNS,
@@ -101,9 +102,10 @@ class DataStore:
                         "limit": "3000",
                     },
                 )
+                return [normalize_restaurant_row(row) for row in rows]
             except DataStoreError:
                 pass
-        return list(self._load_restaurants())
+        return [normalize_restaurant_row(row) for row in self._load_restaurants()]
 
     def get_restaurant(self, rid: str) -> dict[str, Any] | None:
         if self.settings.has_supabase:
@@ -117,10 +119,11 @@ class DataStore:
                     },
                 )
                 if rows:
-                    return rows[0]
+                    return normalize_restaurant_row(rows[0])
             except DataStoreError:
                 pass
-        return self._load_restaurants_by_rid().get(rid)
+        row = self._load_restaurants_by_rid().get(rid)
+        return normalize_restaurant_row(row) if row else None
 
     def get_restaurants_by_rids(self, rids: list[str]) -> list[dict[str, Any]]:
         if not rids:
@@ -137,12 +140,12 @@ class DataStore:
                     },
                 )
                 by_rid = {row["rid"]: row for row in rows}
-                return [by_rid[rid] for rid in rids if rid in by_rid]
+                return [normalize_restaurant_row(by_rid[rid]) for rid in rids if rid in by_rid]
             except DataStoreError:
                 pass
 
         by_rid = self._load_restaurants_by_rid()
-        return [by_rid[rid] for rid in rids if rid in by_rid]
+        return [normalize_restaurant_row(by_rid[rid]) for rid in rids if rid in by_rid]
 
     def search_restaurants_by_text(self, query: str, limit: int) -> list[dict[str, Any]]:
         query = query.strip()
@@ -156,7 +159,7 @@ class DataStore:
                     f"(name.ilike.*{safe}*,road_address.ilike.*{safe}*,"
                     f"jibun_address.ilike.*{safe}*)"
                 )
-                return self._supabase_get(
+                rows = self._supabase_get(
                     "restaurants",
                     {
                         "select": RESTAURANT_COLUMNS,
@@ -164,6 +167,7 @@ class DataStore:
                         "limit": str(limit),
                     },
                 )
+                return [normalize_restaurant_row(row) for row in rows]
             except DataStoreError:
                 pass
 
@@ -184,7 +188,10 @@ class DataStore:
                 name_score = 100 if lowered in str(row.get("name") or "").lower() else 0
                 category_score = 40 if lowered in " ".join(row.get("categories") or []).lower() else 0
                 scored.append((name_score + category_score + _grade_sort(row.get("grade")), row))
-        return [row for _, row in sorted(scored, key=lambda item: item[0], reverse=True)[:limit]]
+        return [
+            normalize_restaurant_row(row)
+            for _, row in sorted(scored, key=lambda item: item[0], reverse=True)[:limit]
+        ]
 
     def match_documents(
         self,
