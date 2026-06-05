@@ -33,8 +33,7 @@ class MainScreen extends ConsumerStatefulWidget {
   ConsumerState<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends ConsumerState<MainScreen>
-    with TickerProviderStateMixin {
+class _MainScreenState extends ConsumerState<MainScreen> {
   String? _detailRestaurantId;
   String? _selectedRestaurantId;
   bool _isDetailOpen = false;
@@ -47,6 +46,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   TextEditingController? _autoCompleteController;
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
+  double _currentSheetSize = 0.45;
 
   final FocusNode _chatFocusNode = FocusNode();
   final TextEditingController _chatInputController = TextEditingController();
@@ -54,9 +54,25 @@ class _MainScreenState extends ConsumerState<MainScreen>
   final List<_ChatMessage> _chatMessages = [];
   bool _isChatSending = false;
 
+  void _onSheetSizeChanged() {
+    if (_sheetController.isAttached) {
+      final newSize = _sheetController.size;
+      if (newSize != _currentSheetSize) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _currentSheetSize = newSize;
+            });
+          }
+        });
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _sheetController.addListener(_onSheetSizeChanged);
     _initApp();
 
     js.context['onMarkerClicked'] = (String clickedId) {
@@ -90,7 +106,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
       Future.delayed(const Duration(milliseconds: 50), () {
         if (_sheetController.isAttached) {
           _sheetController.animateTo(
-            0.65,
+            0.45,
             duration: const Duration(milliseconds: 400),
             curve: Curves.easeOutCubic,
           );
@@ -203,6 +219,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   void dispose() {
+    _sheetController.removeListener(_onSheetSizeChanged);
     _sheetController.dispose();
     _chatFocusNode.dispose();
     _chatInputController.dispose();
@@ -361,7 +378,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
     Future.delayed(const Duration(milliseconds: 50), () {
       if (_sheetController.isAttached) {
         _sheetController.animateTo(
-          0.65,
+          0.45,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
         );
@@ -400,7 +417,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
       _selectedRestaurantId = null;
       _detailRestaurantId = null;
       _isDetailOpen = false;
+      _isKeepMode = false;
     });
+    ref.read(categoryProvider.notifier).toggleCategory('');
 
     final allRestaurants = ref.read(restaurantProvider.notifier).allRestaurants;
 
@@ -493,6 +512,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
     });
 
     final selectedCategory = ref.watch(categoryProvider);
+    final searchQuery = ref.watch(searchQueryProvider);
     final asyncCategories = ref.watch(categorySummariesProvider);
     final asyncDisplayedRestaurants = ref.watch(filteredRestaurantsProvider);
     Widget buildSheetHeader(int count) {
@@ -559,10 +579,74 @@ class _MainScreenState extends ConsumerState<MainScreen>
       );
 
       final categoryNames = asyncCategories.maybeWhen(
-        data: (categories) => categories
-            .map((category) => category.name)
-            .where((name) => name.isNotEmpty)
-            .toList(),
+        data: (categories) {
+          final list = categories
+              .map((category) => category.name)
+              .where((name) => name.isNotEmpty)
+              .toList();
+
+          const popularOrder = [
+            '한식',
+            '중식',
+            '양식',
+            '분식',
+            '일식당',
+            '고깃집',
+            '카페',
+            '술집',
+            '패스트푸드',
+            '뷔페',
+            '브런치',
+            '밥집',
+            '한우',
+            '소고기',
+            '돼지갈비',
+            '보쌈',
+            '해산물',
+            '닭갈비',
+            '돈카츠',
+            '초밥',
+            '짬뽕',
+            '칼국수',
+            '만두',
+            '베트남음식',
+            '태국음식',
+            '멕시칸',
+            '국물요리',
+            '면요리',
+            '한정식',
+            '보리밥정식',
+            '일본가정식',
+            '이탈리안',
+            '막국수',
+            '메밀칼국수',
+            '소바',
+            '순두부',
+            '설렁탕',
+            '알탕',
+            '옹심이',
+            '군만두',
+            '나물',
+            '곤이',
+            '빵',
+            '사케동',
+            '핸드드립',
+          ];
+
+          list.sort((a, b) {
+            final indexA = popularOrder.indexOf(a);
+            final indexB = popularOrder.indexOf(b);
+
+            if (indexA != -1 && indexB != -1) {
+              return indexA.compareTo(indexB);
+            }
+            if (indexA != -1) return -1;
+            if (indexB != -1) return 1;
+            return a.compareTo(b);
+          });
+
+          return list;
+        },
         orElse: () => const <String>[],
       );
 
@@ -692,24 +776,17 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                   child: Text(
                                     _isKeepMode
                                         ? 'keep list 💖'
-                                        : (selectedCategory.isEmpty
-                                              ? '근처 추천 맛집'
-                                              : '✨ 추천 $selectedCategory 맛집'),
+                                        : (searchQuery.isNotEmpty
+                                              ? '"$searchQuery" 검색 결과'
+                                              : (selectedCategory.isEmpty
+                                                    ? '근처 추천 맛집'
+                                                    : '추천 $selectedCategory 맛집')),
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.textPrimary,
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  '모든 카테고리',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                               ],
@@ -746,20 +823,38 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                 }
                               }
                             },
-                            child: AnimatedRotation(
-                              turns: _isCategoryExpanded ? 0.5 : 0.0,
-                              duration: const Duration(milliseconds: 300),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.keyboard_arrow_down,
-                                  color: AppColors.textSecondary,
-                                  size: 20,
-                                ),
+                            behavior: HitTestBehavior.opaque,
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    '모든 카테고리',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  AnimatedRotation(
+                                    turns: _isCategoryExpanded ? 0.5 : 0.0,
+                                    duration: const Duration(milliseconds: 300),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.keyboard_arrow_down,
+                                        color: AppColors.textSecondary,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -862,12 +957,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                           mediaQuery.padding.top -
                           mediaQuery.padding.bottom;
 
-                      double currentSheetSize = 0.45;
-                      if (_sheetController.isAttached) {
-                        currentSheetSize = _sheetController.size;
-                      } else if (_isDetailOpen) {
-                        currentSheetSize = 0.65;
-                      }
+                      final currentSheetSize = _currentSheetSize;
 
                       final bottomOffset = safeAreaHeight * currentSheetSize;
                       final showFloatingButtons =
@@ -877,7 +967,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                         clipBehavior: Clip.none,
                         children: [
                           Positioned(
-                            bottom: bottomOffset + 82,
+                            bottom: bottomOffset + 12,
                             right: 20,
                             child: AnimatedOpacity(
                               duration: const Duration(milliseconds: 200),
@@ -902,19 +992,21 @@ class _MainScreenState extends ConsumerState<MainScreen>
                           ),
                           Positioned(
                             bottom: bottomOffset + 12,
-                            right: 20,
+                            left: 20,
+                            right: 76,
                             child: AnimatedOpacity(
                               duration: const Duration(milliseconds: 200),
                               opacity: showFloatingButtons ? 1.0 : 0.0,
                               child: IgnorePointer(
                                 ignoring: !showFloatingButtons,
                                 child: PointerInterceptor(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      FloatingActionButton(
-                                        heroTag: 'llm_chat_fab',
-                                        onPressed: () {
+                                  child: Center(
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 550,
+                                      ),
+                                      child: GestureDetector(
+                                        onTap: () {
                                           setState(() {
                                             _isChatActive = true;
                                           });
@@ -923,47 +1015,51 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                             () => _chatFocusNode.requestFocus(),
                                           );
                                         },
-                                        backgroundColor: AppColors.background,
-                                        mini: true,
-                                        elevation: 4,
-                                        child: ShaderMask(
-                                          shaderCallback: (bounds) =>
-                                              const LinearGradient(
-                                                colors: [
-                                                  Colors.blue,
-                                                  Colors.purple,
-                                                  Colors.orange,
-                                                ],
-                                              ).createShader(bounds),
-                                          child: const Icon(
-                                            Icons.auto_awesome,
+                                        child: Container(
+                                          height: 48,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                          ),
+                                          decoration: BoxDecoration(
                                             color: Colors.white,
-                                            size: 22,
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.grey.shade200,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                  0.08,
+                                                ),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.search,
+                                                color: Colors.grey,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 12),
+                                              const Expanded(
+                                                child: Text(
+                                                  'AI 맛잘알에게 맛집을 물어보세요!',
+                                                  style: TextStyle(
+                                                    color: Colors.black54,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.65),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: const Text(
-                                          'AI 챗',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1423,10 +1519,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
                     controller: _sheetController,
                     initialChildSize: 0.45,
                     minChildSize: minSize,
-                    maxChildSize: _isDetailOpen ? 1.0 : 0.87,
+                    maxChildSize: _isDetailOpen ? 0.85 : 0.87,
                     snap: true,
                     snapSizes: _isDetailOpen
-                        ? [minSize, 0.65, 1.0]
+                        ? [minSize, 0.45, 0.85]
                         : [minSize, 0.45, 0.87],
                     builder: (BuildContext context, ScrollController scrollController) {
                       return PointerInterceptor(
@@ -1606,7 +1702,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                   if (_sheetController
                                                                       .isAttached) {
                                                                     _sheetController.animateTo(
-                                                                      0.65,
+                                                                      0.45,
                                                                       duration: const Duration(
                                                                         milliseconds:
                                                                             400,
@@ -1866,7 +1962,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
                             onTap: () {},
                             child: Container(
                               constraints: const BoxConstraints(maxHeight: 550),
-                              width: MediaQuery.of(context).size.width,
+                              width: MediaQuery.of(context).size.width > 600
+                                  ? 500.0
+                                  : MediaQuery.of(context).size.width * 0.95,
                               height: MediaQuery.of(context).size.height * 0.55,
                               decoration: BoxDecoration(
                                 color: AppColors.background,

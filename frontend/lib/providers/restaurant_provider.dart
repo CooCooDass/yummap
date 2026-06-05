@@ -1,7 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 
 import 'dart:async';
-import 'dart:js' as js;
 import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -117,12 +116,6 @@ class RestaurantNotifier extends AsyncNotifier<List<Restaurant>> {
     }
 
     final restaurants = _restaurantsForCategory(category);
-    if (restaurants.isNotEmpty) {
-      js.context.callMethod('moveMap', [
-        restaurants.first.latitude,
-        restaurants.first.longitude,
-      ]);
-    }
     return restaurants;
   }
 

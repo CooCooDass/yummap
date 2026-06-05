@@ -369,14 +369,14 @@ class _RestaurantDetailScreenState
                 final currentSize = widget.sheetController!.size;
                 double targetSize;
                 if (currentSize >= 0.8) {
-                  // At 1.0 (expanded), tap goes down to 0.65 (middle)
-                  targetSize = 0.65;
+                  // At 0.85 (expanded), tap goes down to 0.45 (middle)
+                  targetSize = 0.45;
                 } else if (currentSize >= 0.45) {
-                  // At 0.65 (middle), tap goes down to minSize (collapsed)
+                  // At 0.45 (middle), tap goes down to minSize (collapsed)
                   targetSize = widget.minSize;
                 } else {
-                  // At minSize (collapsed), tap goes up to 0.65 (middle)
-                  targetSize = 0.65;
+                  // At minSize (collapsed), tap goes up to 0.45 (middle)
+                  targetSize = 0.45;
                 }
                 widget.sheetController!.animateTo(
                   targetSize,
@@ -393,7 +393,7 @@ class _RestaurantDetailScreenState
                     widget.sheetController!.size -
                     (details.primaryDelta! / screenHeight);
                 widget.sheetController!.jumpTo(
-                  newSize.clamp(widget.minSize, 1.0),
+                  newSize.clamp(widget.minSize, 0.85),
                 );
               }
             },
@@ -405,9 +405,9 @@ class _RestaurantDetailScreenState
 
                 if (velocity > 300) {
                   // Downward flick
-                  if (currentSize > 0.65) {
+                  if (currentSize > 0.45) {
                     widget.sheetController!.animateTo(
-                      0.65,
+                      0.45,
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutQuart,
                     );
@@ -420,22 +420,22 @@ class _RestaurantDetailScreenState
                   }
                 } else if (velocity < -300) {
                   // Upward flick
-                  if (currentSize < 0.65) {
+                  if (currentSize < 0.45) {
                     widget.sheetController!.animateTo(
-                      0.65,
+                      0.45,
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutQuart,
                     );
                   } else {
                     widget.sheetController!.animateTo(
-                      1.0,
+                      0.85,
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutQuart,
                     );
                   }
                 } else {
                   // Slow drag release: snap based on position
-                  final snapSizes = [widget.minSize, 0.65, 1.0];
+                  final snapSizes = [widget.minSize, 0.45, 0.85];
                   double closest = snapSizes.reduce(
                     (a, b) => (a - currentSize).abs() < (b - currentSize).abs()
                         ? a
