@@ -84,7 +84,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
       js.context.callMethod('moveMap', [
         clickedRestaurant.latitude,
         clickedRestaurant.longitude,
-        3,
+        null,
+        0.65,
       ]);
 
       Future.delayed(const Duration(milliseconds: 50), () {
@@ -158,10 +159,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
       if (_isFirstLocationUpdate) {
         _isFirstLocationUpdate = false;
-        js.context.callMethod('moveMap', [
-          position.latitude,
-          position.longitude,
-        ]);
       }
     }, onError: (_) {});
   }
@@ -177,11 +174,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
         ? restaurants.where((r) => r.isFavorite).toList()
         : restaurants;
 
-    if (_isDetailOpen && _detailRestaurantId != null) {
-      displayList = displayList
-          .where((r) => r.id == _detailRestaurantId)
-          .toList();
-    }
+
 
     final markerData = displayList
         .map(
@@ -354,7 +347,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
       js.context.callMethod('moveMap', [
         matched.latitude,
         matched.longitude,
-        3,
+        null,
+        0.65,
       ]);
     }
 
@@ -375,6 +369,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
       js.context.callMethod('moveMap', [
         _myPosition!.latitude,
         _myPosition!.longitude,
+        null,
+        0.45,
       ]);
 
       ref.read(searchQueryProvider.notifier).clearQuery();
@@ -438,6 +434,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
           targetRestaurant.latitude,
           targetRestaurant.longitude,
           3,
+          0.45,
         ]);
       }
 
@@ -456,7 +453,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
       final result = await YumapApiService.searchPlace(keyword);
 
       if (result != null) {
-        js.context.callMethod('moveMap', [result.lat, result.lng, 5]);
+        js.context.callMethod('moveMap', [result.lat, result.lng, 6, 0.45]);
 
         ref.read(searchQueryProvider.notifier).clearQuery();
         ref.read(categoryProvider.notifier).toggleCategory('');
@@ -846,8 +843,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutCubic,
-                    top: _isDetailOpen ? -150 : 0,
-                    bottom: _isDetailOpen ? 150 : 0,
+                    top: 0,
+                    bottom: 0,
                     left: 0,
                     right: 0,
                     child: const MapScreen(),
@@ -1593,7 +1590,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                       .latitude,
                                                                   restaurant
                                                                       .longitude,
-                                                                  3,
+                                                                  null,
+                                                                  0.65,
                                                                 ],
                                                               );
 
@@ -1633,7 +1631,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
                                                                       .latitude,
                                                                   restaurant
                                                                       .longitude,
-                                                                  3,
+                                                                  null,
+                                                                   0.45,
                                                                 ],
                                                               );
 
