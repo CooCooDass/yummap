@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <script>
     let kakaoMap;
+    let kakaoContainer;
     let userMarker;
     let searchMarker;
     let searchOverlay;
@@ -41,8 +42,9 @@
         return;
       }
 
+      kakaoContainer = container;
       const initialPos = new kakao.maps.LatLng(initialLat, initialLng);
-      kakaoMap = new kakao.maps.Map(container, { center: initialPos, level: 3 });
+      kakaoMap = new kakao.maps.Map(container, { center: initialPos, level: 5 });
 
       const svgIcon = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='%23007AFF' stroke='white' stroke-width='3'/%3E%3C/svg%3E";
       const markerImage = new kakao.maps.MarkerImage(svgIcon, new kakao.maps.Size(24, 24), {
@@ -52,21 +54,91 @@
       userMarker = new kakao.maps.Marker({
         map: kakaoMap,
         position: initialPos,
-        image: markerImage
+        image: markerImage,
+        zIndex: 999
       });
 
       kakao.maps.event.addListener(kakaoMap, 'zoom_changed', function () {
         updateLabelVisibility();
       });
+      kakao.maps.event.addListener(kakaoMap, 'bounds_changed', function () {
+        updateLabelVisibility();
+      });
+      updateLabelVisibility();
     }
 
-    window.moveMap = function (lat, lng, level) {
+    window.moveMap = function (lat, lng, level, sheetRatio) {
       if (!kakaoMap) return;
+      if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return;
+
       const targetLatLon = new kakao.maps.LatLng(lat, lng);
       if (typeof level === 'number' && level > 0) {
         kakaoMap.setLevel(level);
       }
-      kakaoMap.panTo(targetLatLon);
+
+      const performMove = function () {
+        let movedWithOffset = false;
+        try {
+          const projection = kakaoMap.getProjection();
+          if (projection) {
+            const container = kakaoContainer;
+            const containerHeight = container ? (container.clientHeight || container.offsetHeight || window.innerHeight) : window.innerHeight;
+
+            let pinRatioFromBottom = 0.50;
+            if (typeof sheetRatio === 'number' && sheetRatio > 0) {
+              pinRatioFromBottom = sheetRatio + 0.15;
+              if (pinRatioFromBottom > 0.90) {
+                pinRatioFromBottom = 0.90;
+              }
+            }
+
+            const offsetY = containerHeight * (pinRatioFromBottom - 0.50);
+            const center = kakaoMap.getCenter();
+            const centerPoint = projection.pointFromCoords(center);
+
+            if (centerPoint) {
+              const offsetPoint = new kakao.maps.Point(centerPoint.x, centerPoint.y + offsetY);
+              const offsetCenter = projection.coordsFromPoint(offsetPoint);
+              if (offsetCenter) {
+                const dLat = offsetCenter.getLat() - center.getLat();
+                const dLng = offsetCenter.getLng() - center.getLng();
+
+                if (!isNaN(dLat) && !isNaN(dLng) && dLat !== 0) {
+                  const newCenter = new kakao.maps.LatLng(targetLatLon.getLat() + dLat, targetLatLon.getLng() + dLng);
+                  kakaoMap.panTo(newCenter);
+                  movedWithOffset = true;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error calculating map offset center:", e);
+        }
+
+        // If projection math failed or returned NaN, use panTo + panBy fallback
+        if (!movedWithOffset) {
+          kakaoMap.panTo(targetLatLon);
+          if (typeof sheetRatio === 'number' && sheetRatio > 0) {
+            const container = kakaoContainer;
+            const containerHeight = container ? (container.clientHeight || container.offsetHeight || window.innerHeight) : window.innerHeight;
+
+            let pinRatioFromBottom = sheetRatio + 0.15;
+            if (pinRatioFromBottom > 0.90) {
+              pinRatioFromBottom = 0.90;
+            }
+            const offsetY = containerHeight * (pinRatioFromBottom - 0.50);
+            setTimeout(function () {
+              kakaoMap.panBy(0, offsetY);
+            }, 300);
+          }
+        }
+      };
+
+      if (!kakaoMap.getProjection()) {
+        setTimeout(performMove, 100);
+      } else {
+        setTimeout(performMove, 50);
+      }
     };
 
     window.setBoundsToRestaurants = function (coordsJson) {
@@ -135,14 +207,14 @@
     function updateLabelVisibility() {
       if (!kakaoMap) return;
       const level = kakaoMap.getLevel();
-      const labels = document.querySelectorAll('.marker-label');
-      labels.forEach(function (label) {
-        if (label.classList.contains('selected')) {
-          label.style.display = 'block';
+      const container = kakaoContainer;
+      if (container) {
+        if (level <= 6) {
+          container.classList.add('zoom-in-labels');
         } else {
-          label.style.display = level <= 5 ? 'block' : 'none';
+          container.classList.remove('zoom-in-labels');
         }
-      });
+      }
     }
 
     window.setRestaurantMarkers = function (restaurantsJson) {
@@ -186,14 +258,14 @@
           return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match];
         });
 
-        const isVisible = (kakaoMap.getLevel() <= 5 || res.isSelected) ? 'block' : 'none';
         const labelClass = res.isSelected ? 'marker-label selected' : 'marker-label';
 
         const overlay = new kakao.maps.CustomOverlay({
           map: kakaoMap,
           position: markerPosition,
-          content: `<div class="${labelClass}" style="display: ${isVisible}">${safeName}</div>`,
-          yAnchor: 0.0
+          content: `<div class="${labelClass}">${safeName}</div>`,
+          yAnchor: 0.0,
+          zIndex: res.isSelected ? 100 : 1
         });
         overlay.setMap(kakaoMap);
         currentOverlays.push(overlay);
@@ -204,6 +276,7 @@
           }
         });
       });
+      updateLabelVisibility();
     };
   </script>
   <style>
@@ -232,6 +305,7 @@
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
       pointer-events: none;
       margin-top: 4px;
+      display: none;
     }
 
     .marker-label.selected {
@@ -242,6 +316,11 @@
       font-weight: 700;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
       padding: 3px 8px;
+      display: block !important;
+    }
+
+    .zoom-in-labels .marker-label {
+      display: block;
     }
   </style>
 </head>
